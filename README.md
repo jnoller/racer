@@ -127,6 +127,11 @@ racer status                   # Check status of running projects
 racer status --project-id <id> # Check specific project by ID
 racer status --list            # List all running projects
 
+# Scale a project to multiple instances
+racer scale --project-name <name> --instances <n> --path <path>  # Scale local project
+racer scale --project-name <name> --instances <n> --git <url>    # Scale from git repo
+racer scale --project-name <name> --instances 3 --ports 8001:8000 # Scale with port mapping
+
 # Rerun a project
 racer rerun                    # Rerun with rebuilt image (includes source changes)
 racer rerun --no-rebuild       # Rerun with existing image (faster restart)
@@ -170,6 +175,7 @@ The backend provides a RESTful API at `http://localhost:8000`:
 - `POST /project/status` - Get comprehensive project status by container ID
 - `POST /project/status-by-id` - Get comprehensive project status by project ID
 - `POST /project/rerun` - Rerun a project by stopping and restarting container
+- `POST /project/scale` - Scale a project to multiple instances
 
 ### Container Management
 - `POST /containers/run` - Run container
@@ -262,7 +268,30 @@ racer status --project-id <project_id>
 racer status --list
 ```
 
-### 6. Rerun Projects
+### 6. Scale Projects
+
+```bash
+# Scale a local project to 3 instances
+racer scale --project-name my-app --instances 3 --path ./my-project
+
+# Scale from git repository
+racer scale --project-name my-app --instances 5 --git https://github.com/user/repo
+
+# Scale with custom port mapping (auto-increments host ports)
+racer scale --project-name my-app --instances 3 --ports 8001:8000
+
+# Scale with custom configuration
+racer scale --project-name my-app --instances 2 --path ./my-project \
+  --ports 8001:8000 --environment DEBUG=true --command "python app.py"
+```
+
+**Scale Behavior:**
+- **Multiple instances**: Creates multiple containers from the same project
+- **Port management**: Auto-increments host ports (8001, 8002, 8003, etc.)
+- **Project naming**: Uses project name for container naming with unique suffixes
+- **Load balancing ready**: Each instance gets unique ports for load balancer setup
+
+### 7. Rerun Projects
 
 ```bash
 # Rerun with rebuilt image (includes source changes)

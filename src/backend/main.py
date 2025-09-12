@@ -124,6 +124,24 @@ class ProjectRerunResponse(BaseModel):
     message: str
     status: Optional[str] = None
 
+class ProjectScaleRequest(BaseModel):
+    project_name: str
+    instances: int = 1
+    project_path: Optional[str] = None
+    git_url: Optional[str] = None
+    custom_commands: Optional[List[str]] = None
+    ports: Optional[Dict[str, int]] = None
+    environment: Optional[Dict[str, str]] = None
+    command: Optional[str] = None
+
+class ProjectScaleResponse(BaseModel):
+    success: bool
+    project_name: str
+    requested_instances: int
+    created_instances: int
+    containers: List[Dict[str, Any]]
+    message: str
+
 class ProjectStatusResponse(BaseModel):
     success: bool
     container_id: str
@@ -630,9 +648,11 @@ async def list_projects():
         projects = []
         
         for container in containers:
-            # Extract project name from container name (remove racer- prefix and timestamp)
+            # Extract project name from container name
             container_name = container.get("container_name", "")
             project_name = container_name
+            
+            # Try to extract project name from various naming patterns
             if container_name.startswith("racer-"):
                 # Remove racer- prefix and timestamp suffix
                 parts = container_name.split("-")
@@ -640,6 +660,19 @@ async def list_projects():
                     project_name = "-".join(parts[1:-1])  # Remove "racer" and timestamp
                 else:
                     project_name = container_name[6:]  # Just remove "racer-"
+            elif "-" in container_name:
+                # For scale command containers: project-name-timestamp-uuid
+                # Extract the base project name (everything before the first timestamp)
+                parts = container_name.split("-")
+                if len(parts) >= 3:
+                    # Find the first part that looks like a timestamp (all digits)
+                    project_parts = []
+                    for part in parts:
+                        if part.isdigit() and len(part) > 8:  # Timestamp-like
+                            break
+                        project_parts.append(part)
+                    if project_parts:
+                        project_name = "-".join(project_parts)
             
             # Create project ID (short container ID for user reference)
             container_id = container.get("container_id", "")
@@ -979,6 +1012,158 @@ async def rerun_project(request: ProjectRerunRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to rerun project: {str(e)}"
+        )
+
+@app.post("/project/scale", response_model=ProjectScaleResponse)
+async def scale_project(request: ProjectScaleRequest):
+    """
+    Scale a project to run multiple instances.
+    """
+    try:
+        project_name = request.project_name
+        instances = request.instances
+        project_path = request.project_path
+        git_url = request.git_url
+        
+        if not project_path and not git_url:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message="Either project_path or git_url must be specified"
+            )
+        
+        # Validate project if path is provided
+        if project_path:
+            validation_result = validate_conda_project(project_path)
+            if not validation_result["valid"]:
+                return ProjectScaleResponse(
+                    success=False,
+                    project_name=project_name,
+                    requested_instances=instances,
+                    created_instances=0,
+                    containers=[],
+                    message=f"Project validation failed: {', '.join(validation_result.get('errors', []))}"
+                )
+        elif git_url:
+            # For git URLs, we'll validate during container creation
+            pass
+        
+        created_containers = []
+        failed_containers = []
+        
+        # Create multiple instances
+        for i in range(instances):
+            try:
+                # Generate unique container name
+                container_name = f"{project_name}-{i+1}"
+                
+                # First, we need to build the image if project_path is provided
+                if project_path:
+                    # Generate Dockerfile
+                    dockerfile_response = generate_dockerfile(
+                        project_path=project_path,
+                        custom_commands=request.custom_commands
+                    )
+                    
+                    # Write Dockerfile
+                    dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
+                    
+                    # Build image
+                    build_response = container_manager.build_image(
+                        project_path=project_path,
+                        project_name=project_name,
+                        dockerfile_path=dockerfile_path
+                    )
+                    
+                    if not build_response["success"]:
+                        failed_containers.append({
+                            'instance': i + 1,
+                            'error': f"Failed to build image: {build_response.get('error', 'Unknown error')}"
+                        })
+                        continue
+                
+                # Prepare run request with instance-specific ports
+                instance_ports = {}
+                if request.ports:
+                    # Assign different ports to each instance
+                    for port_mapping, container_port in request.ports.items():
+                        if isinstance(port_mapping, str) and port_mapping.endswith('/tcp'):
+                            # Extract base port number
+                            base_port = int(port_mapping.split('/')[0])
+                            instance_port = base_port + i
+                            # Docker port mapping: container_port -> host_port
+                            instance_ports[f"{container_port}/tcp"] = instance_port
+                        else:
+                            # Use port as-is for this instance
+                            instance_ports[port_mapping] = container_port
+                else:
+                    # Default port mapping
+                    instance_ports = {"8000/tcp": 8000}
+                
+                # Debug output
+                print(f"Instance {i+1}: ports = {instance_ports}")
+                
+                run_request_data = {
+                    'project_name': project_name,
+                    'ports': instance_ports,
+                    'environment': request.environment,
+                    'command': request.command
+                }
+                
+                # Run container
+                run_response = container_manager.run_container(**run_request_data)
+                
+                if run_response["success"]:
+                    container_info = {
+                        'container_id': run_response.get("container_id"),
+                        'container_name': run_response.get("container_name"),
+                        'ports': run_response.get("ports", {}),
+                        'status': run_response.get("status", "running"),
+                        'instance': i + 1
+                    }
+                    created_containers.append(container_info)
+                else:
+                    failed_containers.append({
+                        'instance': i + 1,
+                        'error': run_response.get('error', 'Unknown error')
+                    })
+                    
+            except Exception as e:
+                failed_containers.append({
+                    'instance': i + 1,
+                    'error': str(e)
+                })
+        
+        # Prepare response
+        success = len(created_containers) > 0
+        message_parts = []
+        
+        if created_containers:
+            message_parts.append(f"Successfully created {len(created_containers)} instance(s)")
+        
+        if failed_containers:
+            message_parts.append(f"Failed to create {len(failed_containers)} instance(s)")
+            for failure in failed_containers:
+                message_parts.append(f"  Instance {failure['instance']}: {failure['error']}")
+        
+        message = "; ".join(message_parts)
+        
+        return ProjectScaleResponse(
+            success=success,
+            project_name=project_name,
+            requested_instances=instances,
+            created_instances=len(created_containers),
+            containers=created_containers,
+            message=message
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to scale project: {str(e)}"
         )
 
 if __name__ == "__main__":

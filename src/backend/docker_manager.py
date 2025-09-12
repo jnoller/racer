@@ -43,7 +43,7 @@ class ContainerManager:
         """
         try:
             # Generate Dockerfile if it doesn't exist
-            from .dockerfile_template import generate_dockerfile, write_dockerfile
+            from dockerfile_template import generate_dockerfile, write_dockerfile
             
             if not os.path.exists(dockerfile_path):
                 dockerfile_content = generate_dockerfile(project_path, custom_commands)

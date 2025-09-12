@@ -274,6 +274,8 @@ def dockerfile(ctx, project_path: str, git_url: str, custom_commands: str):
 
 
 @cli.command()
+@click.option('--project-name', '-n', 'project_name',
+              help='Project name to check status for (shows all instances)')
 @click.option('--project-id', '-p', 'project_id',
               help='Project ID to check status for')
 @click.option('--container-id', '-c', 'container_id',
@@ -281,7 +283,7 @@ def dockerfile(ctx, project_path: str, git_url: str, custom_commands: str):
 @click.option('--list', 'list_projects', is_flag=True,
               help='List all running projects first')
 @click.pass_context
-def status(ctx, project_id: str, container_id: str, list_projects: bool):
+def status(ctx, project_name: str, project_id: str, container_id: str, list_projects: bool):
     """
     Check the status of a running project or list all projects.
     """
@@ -310,7 +312,40 @@ def status(ctx, project_id: str, container_id: str, list_projects: bool):
                 click.echo(click.style("Failed to list projects", fg='red'), err=True)
             return
         
-        # If no project ID or container ID provided, list projects and ask user to choose
+        # Handle project name - show all instances of that project
+        if project_name:
+            projects_response = client._make_request('GET', '/projects')
+            if projects_response.get('success'):
+                projects = projects_response.get('projects', [])
+                matching_projects = [p for p in projects if p['project_name'] == project_name]
+                
+                if not matching_projects:
+                    click.echo(f"No running instances found for project '{project_name}'")
+                    return
+                
+                click.echo(f"Project '{project_name}' instances ({len(matching_projects)}):")
+                click.echo()
+                
+                for project in matching_projects:
+                    container_name = project.get('container_name', 'unknown')
+                    container_status = project.get('status', 'unknown')
+                    ports = project.get('ports', {})
+                    started_at = project.get('started_at', 'unknown')
+                    
+                    click.echo(f"  • {container_name}")
+                    click.echo(f"    ID: {project['project_id']}")
+                    click.echo(f"    Status: {container_status}")
+                    click.echo(f"    Started: {started_at}")
+                    if ports:
+                        click.echo(f"    Ports: {ports}")
+                    click.echo()
+                
+                return
+            else:
+                click.echo(click.style("Failed to list projects", fg='red'), err=True)
+                return
+        
+        # If no project name, project ID or container ID provided, list projects and ask user to choose
         if not project_id and not container_id:
             projects_response = client._make_request('GET', '/projects')
             if projects_response.get('success'):
@@ -324,7 +359,7 @@ def status(ctx, project_id: str, container_id: str, list_projects: bool):
                     project_id = projects[0]['project_id']
                     click.echo(f"Checking status for project: {projects[0]['project_name']}")
                 else:
-                    click.echo("Multiple projects running. Please specify --project-id:")
+                    click.echo("Multiple projects running. Please specify --project-name or --project-id:")
                     for i, project in enumerate(projects, 1):
                         click.echo(f"  {i}. {project['project_name']} (ID: {project['project_id']})")
                     return
@@ -576,6 +611,134 @@ def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: s
                     click.echo(f"Message: {message}")
             else:
                 click.echo(click.style("✗ Project rerun failed", fg='red'))
+                error_msg = response.get('message', 'Unknown error')
+                click.echo(f"Error: {error_msg}")
+                
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg='red'), err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.option('--project-name', '-n', 'project_name', required=True,
+              help='Name for the project (used for container naming)')
+@click.option('--instances', '-i', 'instances', default=1, type=int,
+              help='Number of instances to create')
+@click.option('--path', '-p', 'project_path',
+              help='Path to local conda-project directory')
+@click.option('--git', '-g', 'git_url',
+              help='Git repository URL containing conda-project')
+@click.option('--custom-commands', '-c', 
+              help='Custom RUN commands to add to Dockerfile (comma-separated)')
+@click.option('--ports', '-P', 
+              help='Port mappings (format: host:container, e.g., 8080:8000)')
+@click.option('--environment', '-e', 
+              help='Environment variables (format: KEY=VALUE, comma-separated)')
+@click.option('--command', 
+              help='Override the default command to run')
+@click.pass_context
+def scale(ctx, project_name: str, instances: int, project_path: str, git_url: str, 
+          custom_commands: str, ports: str, environment: str, command: str):
+    """
+    Scale a project to run multiple instances.
+    """
+    api_url = ctx.obj['api_url']
+    timeout = ctx.obj['timeout']
+    verbose = ctx.obj['verbose']
+    
+    if not project_path and not git_url:
+        click.echo(click.style("Error: Either --path or --git must be specified", fg='red'), err=True)
+        ctx.exit(1)
+    
+    try:
+        client = RacerAPIClient(base_url=api_url, timeout=timeout)
+        
+        # Prepare request data
+        request_data = {
+            'project_name': project_name,
+            'instances': instances
+        }
+        
+        if project_path:
+            request_data['project_path'] = project_path
+        if git_url:
+            request_data['git_url'] = git_url
+        if custom_commands:
+            request_data['custom_commands'] = [cmd.strip() for cmd in custom_commands.split(',')]
+        
+        if ports:
+            # Parse port mappings - for scale, we'll use a base port and increment
+            port_mappings = {}
+            port_list = [p.strip() for p in ports.split(',')]
+            if len(port_list) == 1 and ':' in port_list[0]:
+                # Single port mapping - we'll increment the host port for each instance
+                base_host_port, container_port = port_list[0].split(':', 1)
+                base_host_port = int(base_host_port)
+                container_port = container_port.strip()
+                
+                # Create port mappings for each instance
+                for i in range(instances):
+                    host_port = base_host_port + i
+                    port_mappings[f"{host_port}/tcp"] = container_port
+            else:
+                # Multiple port mappings - use as provided
+                for port_mapping in port_list:
+                    if ':' in port_mapping:
+                        host_port, container_port = port_mapping.split(':', 1)
+                        port_mappings[host_port.strip()] = container_port.strip()
+            request_data['ports'] = port_mappings
+        
+        if environment:
+            # Parse environment variables
+            env_vars = {}
+            for env_var in environment.split(','):
+                if '=' in env_var:
+                    key, value = env_var.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+            request_data['environment'] = env_vars
+        
+        if command:
+            request_data['command'] = command
+        
+        # Make API request
+        response = client._make_request('POST', '/project/scale', json=request_data)
+        
+        if verbose:
+            click.echo("Scale response:")
+            click.echo(json.dumps(response, indent=2))
+        else:
+            if response.get('success'):
+                project_name = response.get('project_name', 'unknown')
+                created_instances = response.get('created_instances', 0)
+                requested_instances = response.get('requested_instances', 0)
+                containers = response.get('containers', [])
+                message = response.get('message', '')
+                
+                click.echo(click.style(f"✓ Project scaling successful", fg='green'))
+                click.echo(f"Project: {project_name}")
+                click.echo(f"Created: {created_instances}/{requested_instances} instances")
+                
+                if containers:
+                    click.echo("\nContainers created:")
+                    for container in containers:
+                        instance = container.get('instance', 'unknown')
+                        container_id = container.get('container_id', 'unknown')
+                        container_name = container.get('container_name', 'unknown')
+                        container_ports = container.get('ports', {})
+                        
+                        click.echo(f"  Instance {instance}: {container_name}")
+                        click.echo(f"    ID: {container_id[:12]}")
+                        if container_ports:
+                            click.echo(f"    Ports: {container_ports}")
+                        click.echo()
+                
+                if message:
+                    click.echo(f"Message: {message}")
+            else:
+                click.echo(click.style("✗ Project scaling failed", fg='red'))
                 error_msg = response.get('message', 'Unknown error')
                 click.echo(f"Error: {error_msg}")
                 
