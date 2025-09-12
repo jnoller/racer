@@ -128,7 +128,8 @@ racer status --project-id <id> # Check specific project by ID
 racer status --list            # List all running projects
 
 # Rerun a project
-racer rerun                    # Rerun the only running project
+racer rerun                    # Rerun with rebuilt image (includes source changes)
+racer rerun --no-rebuild       # Rerun with existing image (faster restart)
 racer rerun --project-id <id>  # Rerun specific project by ID
 racer rerun --list             # List projects before rerunning
 ```
@@ -264,18 +265,30 @@ racer status --list
 ### 6. Rerun Projects
 
 ```bash
-# Rerun the only running project
+# Rerun with rebuilt image (includes source changes)
 racer rerun
 
-# Rerun specific project
+# Rerun with existing image (faster restart)
+racer rerun --no-rebuild
+
+# Rerun specific project with rebuilt image
 racer rerun --project-id <project_id>
 
-# Rerun with custom configuration
+# Rerun with custom configuration and rebuilt image
 racer rerun --project-id <project_id> --ports 8080:8000 --environment DEBUG=true
+
+# Fast restart without rebuilding (for configuration changes only)
+racer rerun --project-id <project_id> --no-rebuild
 
 # List projects before rerunning
 racer rerun --list
 ```
+
+**Rerun Behavior:**
+- **Default (`racer rerun`)**: Rebuilds Docker image with updated source files - perfect for code changes
+- **Fast restart (`racer rerun --no-rebuild`)**: Restarts with existing image - ideal for configuration changes only
+- **Source file detection**: Automatically finds project source and rebuilds with latest changes
+- **Configuration preservation**: Maintains original ports, environment, and commands unless overridden
 
 ### 7. Container Management
 

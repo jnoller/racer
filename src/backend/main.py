@@ -113,6 +113,7 @@ class ProjectRerunRequest(BaseModel):
     ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
+    no_rebuild: Optional[bool] = False
 
 class ProjectRerunResponse(BaseModel):
     success: bool
@@ -913,7 +914,40 @@ async def rerun_project(request: ProjectRerunRequest):
             'command': request.command
         }
         
-        # Start new container
+        # Rebuild the Docker image with updated source files (unless no_rebuild is True)
+        if not request.no_rebuild:
+            try:
+                # First, generate a new Dockerfile
+                dockerfile_response = generate_dockerfile(
+                    project_path=project_path,
+                    custom_commands=request.custom_commands
+                )
+                
+                # Write the Dockerfile
+                dockerfile_path = write_dockerfile(project_path, dockerfile_response)
+                
+                # Build the new image
+                build_response = container_manager.build_image(
+                    project_path=project_path,
+                    dockerfile_path=dockerfile_path,
+                    image_name=f"{project_name}:latest"
+                )
+                
+                if not build_response["success"]:
+                    return ProjectRerunResponse(
+                        success=False,
+                        old_container_id=old_container_id,
+                        message=f"Failed to rebuild image: {build_response.get('error', 'Unknown error')}"
+                    )
+                
+            except Exception as e:
+                return ProjectRerunResponse(
+                    success=False,
+                    old_container_id=old_container_id,
+                    message=f"Failed to rebuild image: {str(e)}"
+                )
+        
+        # Start new container with rebuilt image
         try:
             run_response = container_manager.run_container(**run_request_data)
             if not run_response["success"]:
@@ -923,13 +957,14 @@ async def rerun_project(request: ProjectRerunRequest):
                     message=f"Failed to start new container: {run_response.get('error', 'Unknown error')}"
                 )
             
+            rebuild_status = "with rebuilt image" if not request.no_rebuild else "with existing image"
             return ProjectRerunResponse(
                 success=True,
                 old_container_id=old_container_id,
                 new_container_id=run_response.get("container_id"),
                 new_container_name=run_response.get("container_name"),
                 ports=run_response.get("ports"),
-                message=f"Successfully reran project '{project_name}'",
+                message=f"Successfully reran project '{project_name}' {rebuild_status}",
                 status=run_response.get("status")
             )
             

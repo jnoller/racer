@@ -462,10 +462,12 @@ def list_projects(ctx, verbose: bool):
               help='Environment variables (format: KEY=VALUE, comma-separated)')
 @click.option('--command', 
               help='Override the default command to run')
+@click.option('--no-rebuild', 'no_rebuild', is_flag=True,
+              help='Skip rebuilding the Docker image (restart with existing image)')
 @click.option('--list', 'list_projects', is_flag=True,
               help='List all running projects first')
 @click.pass_context
-def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: str, command: str, list_projects: bool):
+def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: str, command: str, no_rebuild: bool, list_projects: bool):
     """
     Rerun a project by stopping the existing container and starting a new one.
     """
@@ -517,7 +519,10 @@ def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: s
                 return
         
         # Prepare request data
-        request_data = {'project_id': project_id}
+        request_data = {
+            'project_id': project_id,
+            'no_rebuild': no_rebuild
+        }
         
         if custom_commands:
             request_data['custom_commands'] = [cmd.strip() for cmd in custom_commands.split(',')]
