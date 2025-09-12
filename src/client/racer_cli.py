@@ -489,6 +489,8 @@ def list_projects(ctx, verbose: bool):
 @cli.command()
 @click.option('--project-id', '-p', 'project_id',
               help='Project ID to rerun')
+@click.option('--project-name', '-n', 'project_name',
+              help='Project name to rerun (will rerun all instances of this project)')
 @click.option('--custom-commands', '-c', 
               help='Custom RUN commands to add to Dockerfile (comma-separated)')
 @click.option('--ports', '-P', 
@@ -502,7 +504,7 @@ def list_projects(ctx, verbose: bool):
 @click.option('--list', 'list_projects', is_flag=True,
               help='List all running projects first')
 @click.pass_context
-def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: str, command: str, no_rebuild: bool, list_projects: bool):
+def rerun(ctx, project_id: str, project_name: str, custom_commands: str, ports: str, environment: str, command: str, no_rebuild: bool, list_projects: bool):
     """
     Rerun a project by stopping the existing container and starting a new one.
     """
@@ -531,8 +533,13 @@ def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: s
                 click.echo(click.style("Failed to list projects", fg='red'), err=True)
             return
         
-        # If no project ID provided, list projects and ask user to choose
-        if not project_id:
+        # Validate that either project_id or project_name is provided, but not both
+        if project_id and project_name:
+            click.echo(click.style("Error: Cannot specify both --project-id and --project-name", fg='red'), err=True)
+            return
+        
+        # If no project identifier provided, list projects and ask user to choose
+        if not project_id and not project_name:
             projects_response = client._make_request('GET', '/projects')
             if projects_response.get('success'):
                 projects = projects_response.get('projects', [])
@@ -545,7 +552,7 @@ def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: s
                     project_id = projects[0]['project_id']
                     click.echo(f"Rerunning project: {projects[0]['project_name']}")
                 else:
-                    click.echo("Multiple projects running. Please specify --project-id:")
+                    click.echo("Multiple projects running. Please specify --project-id or --project-name:")
                     for i, project in enumerate(projects, 1):
                         click.echo(f"  {i}. {project['project_name']} (ID: {project['project_id']})")
                     return
@@ -553,6 +560,97 @@ def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: s
                 click.echo(click.style("Failed to list projects", fg='red'), err=True)
                 return
         
+        # If project_name is provided, find the project ID(s)
+        if project_name:
+            projects_response = client._make_request('GET', '/projects')
+            if projects_response.get('success'):
+                projects = projects_response.get('projects', [])
+                matching_projects = [p for p in projects if p['project_name'] == project_name]
+                
+                if not matching_projects:
+                    click.echo(click.style(f"No running projects found with name '{project_name}'", fg='red'), err=True)
+                    click.echo("Available projects:")
+                    for project in projects:
+                        click.echo(f"  • {project['project_name']} (ID: {project['project_id']})")
+                    return
+                
+                if len(matching_projects) == 1:
+                    project_id = matching_projects[0]['project_id']
+                    click.echo(f"Rerunning project: {project_name}")
+                else:
+                    # Multiple instances of the same project name - rerun all
+                    click.echo(f"Found {len(matching_projects)} instances of project '{project_name}'. Rerunning all instances...")
+                    for project in matching_projects:
+                        click.echo(f"  • Instance {project['project_id']}")
+                    
+                    # Rerun all instances
+                    success_count = 0
+                    for project in matching_projects:
+                        project_id = project['project_id']
+                        click.echo(f"\nRerunning instance {project_id}...")
+                        
+                        # Prepare request data for this instance
+                        request_data = {
+                            'project_id': project_id,
+                            'no_rebuild': no_rebuild
+                        }
+                        
+                        if custom_commands:
+                            request_data['custom_commands'] = [cmd.strip() for cmd in custom_commands.split(',')]
+                        
+                        if ports:
+                            # Parse port mappings
+                            port_mappings = {}
+                            for port_mapping in ports.split(','):
+                                if ':' in port_mapping:
+                                    host_port, container_port = port_mapping.split(':', 1)
+                                    port_mappings[host_port.strip()] = container_port.strip()
+                            request_data['ports'] = port_mappings
+                        
+                        if environment:
+                            # Parse environment variables
+                            env_vars = {}
+                            for env_var in environment.split(','):
+                                if '=' in env_var:
+                                    key, value = env_var.split('=', 1)
+                                    env_vars[key.strip()] = value.strip()
+                            request_data['environment'] = env_vars
+                        
+                        if command:
+                            request_data['command'] = command
+                        
+                        # Make API request for this instance
+                        response = client._make_request('POST', '/project/rerun', json=request_data)
+                        
+                        if response.get('success'):
+                            success_count += 1
+                            old_container_id = response.get('old_container_id', 'unknown')
+                            new_container_id = response.get('new_container_id', 'unknown')
+                            new_container_name = response.get('new_container_name', 'unknown')
+                            ports_info = response.get('ports', {})
+                            
+                            click.echo(click.style(f"  ✓ Instance {project_id} rerun successful", fg='green'))
+                            click.echo(f"    Old container: {old_container_id[:12]}")
+                            click.echo(f"    New container: {new_container_id[:12]}")
+                            click.echo(f"    Container name: {new_container_name}")
+                            
+                            if ports_info:
+                                click.echo("    Ports:")
+                                for host_port, container_port in ports_info.items():
+                                    click.echo(f"      {host_port} -> {container_port}")
+                        else:
+                            click.echo(click.style(f"  ✗ Instance {project_id} rerun failed", fg='red'))
+                            error_msg = response.get('message', 'Unknown error')
+                            click.echo(f"    Error: {error_msg}")
+                    
+                    # Summary
+                    click.echo(f"\nRerun summary: {success_count}/{len(matching_projects)} instances successful")
+                    return
+            else:
+                click.echo(click.style("Failed to list projects", fg='red'), err=True)
+                return
+        
+        # Single instance rerun (either by project_id or single project_name match)
         # Prepare request data
         request_data = {
             'project_id': project_id,

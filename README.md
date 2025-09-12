@@ -139,6 +139,7 @@ racer scale --project-name <name> --instances 3 --ports 8001:8000 # Scale with p
 racer rerun                    # Rerun with rebuilt image (includes source changes)
 racer rerun --no-rebuild       # Rerun with existing image (faster restart)
 racer rerun --project-id <id>  # Rerun specific project by ID
+racer rerun --project-name <name>  # Rerun all instances of project by name
 racer rerun --list             # List projects before rerunning
 ```
 
@@ -309,11 +310,17 @@ racer rerun --no-rebuild
 # Rerun specific project with rebuilt image
 racer rerun --project-id <project_id>
 
+# Rerun all instances of a project by name
+racer rerun --project-name my-app
+
 # Rerun with custom configuration and rebuilt image
 racer rerun --project-id <project_id> --ports 8080:8000 --environment DEBUG=true
 
 # Fast restart without rebuilding (for configuration changes only)
 racer rerun --project-id <project_id> --no-rebuild
+
+# Rerun all instances of a project without rebuilding
+racer rerun --project-name my-app --no-rebuild
 
 # List projects before rerunning
 racer rerun --list
@@ -322,8 +329,11 @@ racer rerun --list
 **Rerun Behavior:**
 - **Default (`racer rerun`)**: Rebuilds Docker image with updated source files - perfect for code changes
 - **Fast restart (`racer rerun --no-rebuild`)**: Restarts with existing image - ideal for configuration changes only
+- **Project name support**: Use `--project-name` to rerun all instances of a scaled project
+- **Project ID support**: Use `--project-id` to rerun a specific instance
 - **Source file detection**: Automatically finds project source and rebuilds with latest changes
 - **Configuration preservation**: Maintains original ports, environment, and commands unless overridden
+- **Multi-instance handling**: When using `--project-name`, reruns all instances of that project
 
 ### 7. Container Management
 
