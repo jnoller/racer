@@ -16,6 +16,8 @@
 - 📦 **Conda-project support** with validation and environment management
 - 🔧 **Dual CLI interface** for users and administrators
 - 🌐 **RESTful API** with health, validation, and container management endpoints
+- 📈 **Horizontal scaling** with Docker Compose for multiple instances
+- 🔄 **Load balancing ready** with Nginx configuration generation
 - 🧪 **Comprehensive testing** with unit and integration tests
 - 📊 **Coverage reporting** and automated testing
 - ⚡ **Fast development** with hot-reload and development tools
@@ -87,7 +89,8 @@ racer/
 │   │   ├── main.py           # FastAPI application entry point
 │   │   ├── docker_manager.py # Docker container management
 │   │   ├── project_validator.py # Conda-project validation
-│   │   └── dockerfile_template.py # Dockerfile generation
+│   │   ├── dockerfile_template.py # Dockerfile generation
+│   │   └── compose_template.py # Docker Compose template generation
 │   └── client/               # Command line clients
 │       ├── __init__.py
 │       ├── api.py            # API client library
@@ -286,10 +289,13 @@ racer scale --project-name my-app --instances 2 --path ./my-project \
 ```
 
 **Scale Behavior:**
+- **Docker Compose orchestration**: Uses Docker Compose for reliable multi-container management
 - **Multiple instances**: Creates multiple containers from the same project
 - **Port management**: Auto-increments host ports (8001, 8002, 8003, etc.)
 - **Project naming**: Uses project name for container naming with unique suffixes
 - **Load balancing ready**: Each instance gets unique ports for load balancer setup
+- **Service management**: Automatic health checks and restart policies
+- **Generated files**: Creates `docker-compose.yml` and optional `nginx.conf` for load balancing
 
 ### 7. Rerun Projects
 
@@ -395,6 +401,7 @@ DOCKER_HOST=unix:///var/run/docker.sock
 - **Docker** - Docker SDK for Python
 - **GitPython** - Git repository management
 - **PyYAML** - YAML parsing
+- **Docker Compose** - Multi-container orchestration
 
 ### Development Dependencies
 - **pytest** - Testing framework
@@ -489,5 +496,7 @@ mypy src/
 - Dual CLI interface (racer/racerctl)
 - Docker integration with container management
 - Conda-project validation and deployment
+- Horizontal scaling with Docker Compose
+- Load balancing with Nginx configuration
 - Comprehensive testing infrastructure
 - Development automation with Makefile
