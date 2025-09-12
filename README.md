@@ -4,8 +4,21 @@
 
 `racer` is a comprehensive deployment platform that simplifies the process of deploying conda-based applications to containerized environments. The system consists of:
 
-1. **Backend Orchestration API** (FastAPI) - A Heroku/Fly.io-like REST API server that deploys `conda-project` based applications to one or more Docker containers and manages them on behalf of the user
-2. **Command Line Client** (`racerctl`) - User-facing commands such as `racerctl init`, `racerctl deploy`, and more
+1. **Backend Orchestration API** (FastAPI) - A Heroku/Fly.io-like REST API server that deploys `conda-project` based applications to Docker containers
+2. **Dual CLI Interface**:
+   - `racer` - User-facing commands for running and managing projects
+   - `racerctl` - Admin commands for container and service management
+
+## Features
+
+- 🚀 **One-command deployment** of conda-projects to Docker containers
+- 🐳 **Docker integration** with automatic image building and container management
+- 📦 **Conda-project support** with validation and environment management
+- 🔧 **Dual CLI interface** for users and administrators
+- 🌐 **RESTful API** with health, validation, and container management endpoints
+- 🧪 **Comprehensive testing** with unit and integration tests
+- 📊 **Coverage reporting** and automated testing
+- ⚡ **Fast development** with hot-reload and development tools
 
 ## Prerequisites
 
@@ -32,56 +45,31 @@ Use the provided Makefile for easy setup:
 # Create conda environment and install all dependencies
 make setup
 
-# Activate the environment
-conda activate racer
-```
-
-### 3. Manual Setup (Alternative)
-
-If you prefer to set up manually:
-
-```bash
-# Create environment with Python 3.11 (recommended)
-conda create -n racer python=3.11 -y
-
-# Activate the environment
-conda activate racer
-
-# Install conda-project (required for conda project management)
-conda install -c conda-forge conda-project -y
-
-# Install all Python dependencies via pip
-pip install -r requirements.txt
-```
-
-### 4. Development Setup
-
-#### Using Makefile (Recommended)
-
-```bash
 # Install development dependencies and client
 make install-dev
 
-# Run backend server
-make backend
-
-# Install client in development mode
-make client
+# Activate the environment
+conda activate racer
 ```
 
-#### Manual Development Setup
+### 3. Start the Backend Server
 
 ```bash
-# Install development dependencies (if separate from main requirements)
-pip install -r requirements-dev.txt
+# Start the API server
+make backend
 
-# Backend Development
-cd src/backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# Or run directly
+cd src/backend && conda run -n racer python main.py
+```
 
-# Client Development
-cd src/client
-pip install -e .
+### 4. Test the Installation
+
+```bash
+# Test the API health
+curl http://localhost:8000/health
+
+# Test the CLI
+racer --help
 racerctl --help
 ```
 
@@ -90,163 +78,328 @@ racerctl --help
 ```
 racer/
 ├── README.md
-├── Makefile              # Development automation
-├── requirements.txt       # Main Python dependencies
-├── requirements-dev.txt   # Development dependencies (optional)
+├── Makefile                    # Development automation
+├── pytest.ini                 # Test configuration
+├── requirements.txt            # Main Python dependencies
+├── requirements-dev.txt        # Development dependencies
 ├── src/
-│   ├── backend/           # FastAPI orchestration server
-│   │   └── main.py       # FastAPI application entry point
-│   └── client/           # Command line client (racerctl)
+│   ├── backend/               # FastAPI orchestration server
+│   │   ├── main.py           # FastAPI application entry point
+│   │   ├── docker_manager.py # Docker container management
+│   │   ├── project_validator.py # Conda-project validation
+│   │   └── dockerfile_template.py # Dockerfile generation
+│   └── client/               # Command line clients
 │       ├── __init__.py
-│       ├── cli.py        # CLI command definitions
-│       └── setup.py
-└── docs/                 # Additional documentation
+│       ├── api.py            # API client library
+│       ├── racer_cli.py      # User-facing CLI (racer)
+│       ├── cli.py            # Admin CLI (racerctl)
+│       └── setup.py          # Client installation
+├── tests/                    # Test suite
+│   ├── test_basic.py         # Basic functionality tests
+│   ├── test_integration_simple.py # Integration tests
+│   ├── conftest.py          # Test fixtures
+│   └── README.md            # Test documentation
+└── test-project/            # Sample conda-project for testing
+    ├── conda-project.yml
+    ├── environment.yml
+    └── main.py
 ```
+
+## CLI Commands
+
+### User Commands (`racer`)
+
+```bash
+# Run a conda-project in Docker
+racer run --path /path/to/project --ports 8080:8000
+
+# Validate a conda-project
+racer validate --path /path/to/project
+
+# Generate Dockerfile for a project
+racer dockerfile --path /path/to/project
+
+# Check API server status
+racer status
+```
+
+### Admin Commands (`racerctl`)
+
+```bash
+# Health and status
+racerctl health
+racerctl liveness
+racerctl readiness
+racerctl info
+
+# Container management
+racerctl containers list
+racerctl containers status <container_id>
+racerctl containers logs <container_id>
+racerctl containers stop <container_id>
+racerctl containers remove <container_id>
+racerctl containers cleanup
+```
+
+## API Endpoints
+
+The backend provides a RESTful API at `http://localhost:8000`:
+
+### Health & Status
+- `GET /` - API information
+- `GET /health` - Health check
+- `GET /liveness` - Liveness probe
+- `GET /ready` - Readiness probe
+
+### Project Management
+- `POST /validate` - Validate conda-project
+- `POST /dockerfile` - Generate Dockerfile
+- `POST /run` - Build and run project (legacy)
+
+### Container Management
+- `POST /containers/run` - Run container
+- `GET /containers` - List containers
+- `GET /containers/{id}/status` - Container status
+- `GET /containers/{id}/logs` - Container logs
+- `POST /containers/{id}/stop` - Stop container
+- `DELETE /containers/{id}` - Remove container
+- `POST /containers/cleanup` - Cleanup stopped containers
 
 ## Makefile Commands
 
-The project includes a Makefile for common development tasks:
+The project includes a comprehensive Makefile for development:
 
 ```bash
 # Show all available commands
 make help
 
-# Setup conda environment and install dependencies
-make setup
+# Setup and installation
+make setup              # Create conda environment and install dependencies
+make install-dev        # Install development dependencies and client
 
-# Install development dependencies
-make install-dev
+# Development
+make backend           # Run backend server
+make client            # Install client in development mode
 
-# Run backend server
-make backend
+# Testing
+make test              # Run all tests
+make test-unit         # Run unit tests only
+make test-integration  # Run integration tests only
+make test-quick        # Run quick tests (no Docker/API)
+make test-coverage     # Run tests with coverage report
 
-# Install client in development mode
-make client
+# Code quality
+make lint              # Run linting
+make format            # Format code
 
-# Run tests
-make test
-
-# Run linting
-make lint
-
-# Format code
-make format
-
-# Clean up conda environment
-make clean
+# Cleanup
+make clean             # Remove conda environment
 ```
 
-## Environment Management
+## Usage Examples
 
-### Using Conda Environments
-
-We recommend using conda environments for dependency management:
+### 1. Deploy a Local Project
 
 ```bash
-# List all environments
-conda env list
+# Start the backend server
+make backend
 
-# Activate the racer environment
-conda activate racer
-
-# Deactivate the environment
-conda deactivate
-
-# Remove the environment (if needed)
-conda env remove -n racer
+# In another terminal, run your project
+racer run --path /path/to/your/conda-project --ports 8080:8000
 ```
 
-### Dependency Management
+### 2. Deploy from Git Repository
 
-- **Main Dependencies**: Uses `pip` for Python package management with top-level `requirements.txt`
-- **Development Dependencies**: Optional `requirements-dev.txt` for development tools
-- **Conda Projects**: Uses `conda-project` for conda environment management
-- **Client**: Uses `pip` with `setup.py` for development installation
+```bash
+racer run --git https://github.com/user/repo.git --ports 8080:8000
+```
+
+### 3. Validate a Project
+
+```bash
+# Validate local project
+racer validate --path /path/to/project
+
+# Validate git repository
+racer validate --git https://github.com/user/repo.git
+```
+
+### 4. Generate Dockerfile
+
+```bash
+# Generate Dockerfile for a project
+racer dockerfile --path /path/to/project --output ./Dockerfile
+```
+
+### 5. Container Management
+
+```bash
+# List running containers
+racerctl containers list
+
+# View container logs
+racerctl containers logs <container_id>
+
+# Stop a container
+racerctl containers stop <container_id>
+```
+
+## Testing
+
+The project includes comprehensive testing infrastructure:
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run specific test types
+make test-unit         # Unit tests
+make test-integration  # Integration tests
+make test-quick        # Quick tests (no Docker/API)
+
+# Run with coverage
+make test-coverage
+```
+
+### Test Structure
+
+- **Unit Tests**: Test individual functions and classes
+- **Integration Tests**: Test API endpoints and full workflows
+- **Coverage**: HTML coverage reports in `htmlcov/`
 
 ## Configuration
+
+### Environment Variables
+
+```bash
+# API Configuration
+export RACER_API_URL=http://localhost:8000
+export RACER_API_TIMEOUT=30
+
+# Docker Configuration
+export DOCKER_HOST=unix:///var/run/docker.sock
+```
 
 ### Backend Configuration
 
 Create a `.env` file in the `src/backend` directory:
 
 ```bash
-# Database configuration
-DATABASE_URL=sqlite:///./racer.db
-
-# Docker configuration
-DOCKER_HOST=unix:///var/run/docker.sock
-
 # API configuration
 API_HOST=0.0.0.0
 API_PORT=8000
 DEBUG=True
+
+# Docker configuration
+DOCKER_HOST=unix:///var/run/docker.sock
 ```
 
-### Client Configuration
+## Dependencies
 
-The client can be configured via environment variables or a config file:
+### Core Dependencies
+- **FastAPI** - Web framework for the API
+- **Uvicorn** - ASGI server
+- **Pydantic** - Data validation
+- **Click** - CLI framework
+- **Requests** - HTTP client
+- **Docker** - Docker SDK for Python
+- **GitPython** - Git repository management
+- **PyYAML** - YAML parsing
 
-```bash
-# Set the backend API URL
-export RACER_API_URL=http://localhost:8000
-
-# Or create ~/.racer/config.yaml
-api_url: http://localhost:8000
-```
-
-## Usage Examples
-
-### Initialize a New Project
-
-```bash
-# Initialize a new conda project
-racerctl init my-app
-
-# Navigate to the project
-cd my-app
-
-# Add dependencies
-conda add python=3.11
-conda add fastapi uvicorn
-```
-
-### Deploy Your Application
-
-```bash
-# Deploy to the racer platform
-racerctl deploy
-
-# Check deployment status
-racerctl status
-
-# View logs
-racerctl logs
-```
+### Development Dependencies
+- **pytest** - Testing framework
+- **pytest-cov** - Coverage reporting
+- **black** - Code formatting
+- **flake8** - Linting
+- **mypy** - Type checking
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Conda not found**: Ensure conda is installed and in your PATH
-2. **Docker not running**: Start Docker Desktop or Docker daemon
-3. **Port conflicts**: Change the API port in the backend configuration
-4. **Permission issues**: Ensure your user has Docker permissions
+1. **Docker not running**: Start Docker Desktop or Docker daemon
+2. **Port conflicts**: Change the API port in configuration
+3. **Permission issues**: Ensure your user has Docker permissions
+4. **Import errors**: Ensure PYTHONPATH is set correctly
 
 ### Getting Help
 
-- Check the logs: `racerctl logs --follow`
-- Verify environment: `conda info --envs`
-- Test Docker: `docker ps`
+```bash
+# Check API health
+curl http://localhost:8000/health
+
+# Check CLI help
+racer --help
+racerctl --help
+
+# View container status
+racerctl containers list
+
+# Check logs
+racerctl containers logs <container_id>
+```
+
+### Debug Mode
+
+```bash
+# Run with verbose output
+racer --verbose run --path /path/to/project
+racerctl --verbose containers list
+```
+
+## Development
+
+### Setting up Development Environment
+
+```bash
+# Clone and setup
+git clone <repository-url>
+cd racer
+make setup
+make install-dev
+
+# Start backend in development mode
+make backend
+
+# Run tests
+make test
+```
+
+### Code Quality
+
+```bash
+# Format code
+make format
+
+# Run linting
+make lint
+
+# Run type checking
+mypy src/
+```
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature-name`
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+4. Add tests for new functionality
+5. Run the test suite: `make test`
+6. Submit a pull request
 
 ## License
 
 [Add your license information here]
 
+## Changelog
+
+### v0.1.0
+- Initial release
+- FastAPI backend with health endpoints
+- Dual CLI interface (racer/racerctl)
+- Docker integration with container management
+- Conda-project validation and deployment
+- Comprehensive testing infrastructure
+- Development automation with Makefile

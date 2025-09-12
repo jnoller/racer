@@ -1,0 +1,9 @@
+name: test-project
+environments:
+  default:
+    - environment.yml
+variables: {}
+commands:
+  run:
+    cmd: python main.py
+    environment: default

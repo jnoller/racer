@@ -33,7 +33,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "racerctl=cli:cli",
+            "racer=racer_cli:cli",
+            "racerctl=racerctl:cli",
         ],
     },
     include_package_data=True,

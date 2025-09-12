@@ -6,7 +6,7 @@ import click
 import json
 import os
 from typing import Optional
-from .api import RacerAPIClient, RacerAPIError
+from api import RacerAPIClient, RacerAPIError
 
 
 # Global configuration
@@ -52,9 +52,6 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 def health(ctx):
     """
     Check the health status of the Racer API server.
-    
-    This command queries the /health endpoint to verify that the API server
-    is running and responding correctly.
     """
     api_url = ctx.obj['api_url']
     timeout = ctx.obj['timeout']
@@ -62,24 +59,19 @@ def health(ctx):
     
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        health_data = client.health()
+        response = client.health()
         
         if verbose:
-            click.echo("Health check response:")
-            click.echo(json.dumps(health_data, indent=2))
+            click.echo("Health response:")
+            click.echo(json.dumps(response, indent=2))
         else:
-            # Simple status display
-            status = health_data.get('status', 'unknown')
-            service = health_data.get('service', 'unknown')
-            version = health_data.get('version', 'unknown')
-            timestamp = health_data.get('timestamp', 'unknown')
-            
-            if status == 'healthy':
-                click.echo(click.style(f"✓ {service} v{version} is healthy", fg='green'))
-                click.echo(f"  Timestamp: {timestamp}")
+            if response.get('status') == 'healthy':
+                click.echo(click.style("✓ API is healthy", fg='green'))
+                click.echo(f"Status: {response.get('status')}")
+                click.echo(f"Timestamp: {response.get('timestamp')}")
             else:
-                click.echo(click.style(f"✗ {service} v{version} is {status}", fg='red'))
-                click.echo(f"  Timestamp: {timestamp}")
+                click.echo(click.style("✗ API is not healthy", fg='red'))
+                click.echo(f"Status: {response.get('status')}")
                 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
@@ -94,9 +86,6 @@ def health(ctx):
 def liveness(ctx):
     """
     Check the liveness status of the Racer API server.
-    
-    This command queries the /liveness endpoint to verify that the API server
-    is alive and should continue running (used by container orchestrators).
     """
     api_url = ctx.obj['api_url']
     timeout = ctx.obj['timeout']
@@ -104,24 +93,19 @@ def liveness(ctx):
     
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        liveness_data = client.liveness()
+        response = client.liveness()
         
         if verbose:
-            click.echo("Liveness check response:")
-            click.echo(json.dumps(liveness_data, indent=2))
+            click.echo("Liveness response:")
+            click.echo(json.dumps(response, indent=2))
         else:
-            # Simple status display
-            alive = liveness_data.get('alive', False)
-            uptime = liveness_data.get('uptime', 'unknown')
-            timestamp = liveness_data.get('timestamp', 'unknown')
-            
-            if alive:
-                click.echo(click.style("✓ Server is alive", fg='green'))
-                click.echo(f"  Uptime: {uptime}")
-                click.echo(f"  Timestamp: {timestamp}")
+            if response.get('status') == 'alive':
+                click.echo(click.style("✓ API is alive", fg='green'))
+                click.echo(f"Status: {response.get('status')}")
+                click.echo(f"Timestamp: {response.get('timestamp')}")
             else:
-                click.echo(click.style("✗ Server is not alive", fg='red'))
-                click.echo(f"  Timestamp: {timestamp}")
+                click.echo(click.style("✗ API is not alive", fg='red'))
+                click.echo(f"Status: {response.get('status')}")
                 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
@@ -136,9 +120,6 @@ def liveness(ctx):
 def readiness(ctx):
     """
     Check the readiness status of the Racer API server.
-    
-    This command queries the /ready endpoint to verify that the API server
-    is ready to accept traffic (checks dependencies like database, Docker, etc.).
     """
     api_url = ctx.obj['api_url']
     timeout = ctx.obj['timeout']
@@ -146,31 +127,19 @@ def readiness(ctx):
     
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        readiness_data = client.readiness()
+        response = client.readiness()
         
         if verbose:
-            click.echo("Readiness check response:")
-            click.echo(json.dumps(readiness_data, indent=2))
+            click.echo("Readiness response:")
+            click.echo(json.dumps(response, indent=2))
         else:
-            # Simple status display
-            ready = readiness_data.get('ready', False)
-            checks = readiness_data.get('checks', {})
-            timestamp = readiness_data.get('timestamp', 'unknown')
-            
-            if ready:
-                click.echo(click.style("✓ Server is ready", fg='green'))
-                click.echo(f"  Timestamp: {timestamp}")
-                
-                # Show individual checks
-                if checks:
-                    click.echo("  Dependency checks:")
-                    for check, status in checks.items():
-                        status_icon = "✓" if status == "ok" else "✗"
-                        status_color = "green" if status == "ok" else "red"
-                        click.echo(f"    {status_icon} {check}: {status}")
+            if response.get('status') == 'ready':
+                click.echo(click.style("✓ API is ready", fg='green'))
+                click.echo(f"Status: {response.get('status')}")
+                click.echo(f"Timestamp: {response.get('timestamp')}")
             else:
-                click.echo(click.style("✗ Server is not ready", fg='red'))
-                click.echo(f"  Timestamp: {timestamp}")
+                click.echo(click.style("✗ API is not ready", fg='red'))
+                click.echo(f"Status: {response.get('status')}")
                 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
@@ -185,9 +154,6 @@ def readiness(ctx):
 def info(ctx):
     """
     Get basic information about the Racer API server.
-    
-    This command queries the root endpoint to get API information and
-    available endpoints.
     """
     api_url = ctx.obj['api_url']
     timeout = ctx.obj['timeout']
@@ -195,24 +161,16 @@ def info(ctx):
     
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        info_data = client.info()
+        response = client.info()
         
         if verbose:
-            click.echo("API information response:")
-            click.echo(json.dumps(info_data, indent=2))
+            click.echo("Info response:")
+            click.echo(json.dumps(response, indent=2))
         else:
-            # Simple info display
-            message = info_data.get('message', 'Unknown')
-            version = info_data.get('version', 'unknown')
-            
-            click.echo(click.style(f"{message} v{version}", fg='blue'))
-            
-            # Show available endpoints
-            endpoints = {k: v for k, v in info_data.items() if k not in ['message', 'version']}
-            if endpoints:
-                click.echo("Available endpoints:")
-                for endpoint, path in endpoints.items():
-                    click.echo(f"  {endpoint}: {path}")
+            click.echo(f"Service: {response.get('service', 'unknown')}")
+            click.echo(f"Version: {response.get('version', 'unknown')}")
+            click.echo(f"Uptime: {response.get('uptime', 'unknown')}")
+            click.echo(f"Status: {response.get('status', 'unknown')}")
                 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)

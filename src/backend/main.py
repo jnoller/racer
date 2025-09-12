@@ -5,13 +5,21 @@ A FastAPI-based orchestration server for deploying conda-project applications
 to Docker containers with a Heroku/Fly.io-like REST API.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import uvicorn
 import os
+import tempfile
+import shutil
 from datetime import datetime
+from pathlib import Path
+
+# Import our custom modules
+from project_validator import validate_conda_project, validate_git_repository, cleanup_temp_directory
+from dockerfile_template import generate_dockerfile, write_dockerfile
+from docker_manager import ContainerManager
 
 # Create FastAPI application
 app = FastAPI(
@@ -34,8 +42,75 @@ class LivenessResponse(BaseModel):
     timestamp: str
     uptime: str
 
+class ProjectValidationRequest(BaseModel):
+    project_path: Optional[str] = None
+    git_url: Optional[str] = None
+
+class ProjectValidationResponse(BaseModel):
+    valid: bool
+    project_name: str
+    project_version: str
+    environments: List[str]
+    channels: List[str]
+    dependencies: Dict[str, Any]
+    errors: List[str]
+    warnings: List[str]
+    project_path: str
+    git_url: Optional[str] = None
+
+class DockerfileGenerationRequest(BaseModel):
+    project_path: Optional[str] = None
+    git_url: Optional[str] = None
+    custom_commands: Optional[List[str]] = None
+
+class DockerfileGenerationResponse(BaseModel):
+    success: bool
+    dockerfile_path: str
+    dockerfile_content: str
+    project_name: str
+    message: str
+
+class ContainerRunRequest(BaseModel):
+    project_path: Optional[str] = None
+    git_url: Optional[str] = None
+    custom_commands: Optional[List[str]] = None
+    ports: Optional[Dict[str, int]] = None
+    environment: Optional[Dict[str, str]] = None
+    command: Optional[str] = None
+
+class ContainerRunResponse(BaseModel):
+    success: bool
+    container_id: Optional[str] = None
+    container_name: Optional[str] = None
+    ports: Optional[Dict[str, int]] = None
+    message: str
+    status: Optional[str] = None
+
+class ContainerStatusResponse(BaseModel):
+    success: bool
+    container_id: str
+    container_name: str
+    status: str
+    ports: Dict[str, int]
+    started_at: str
+    stopped_at: Optional[str] = None
+    image: str
+
+class ContainerLogsResponse(BaseModel):
+    success: bool
+    container_id: str
+    logs: str
+    message: str
+
 # Global variables for tracking
 start_time = datetime.now()
+
+# Initialize container manager
+try:
+    container_manager = ContainerManager()
+except Exception as e:
+    print(f"Warning: Failed to initialize Docker container manager: {e}")
+    container_manager = None
 
 @app.get("/", response_model=Dict[str, str])
 async def root():
@@ -103,6 +178,389 @@ async def readiness_check():
             "conda": "ok"      # Placeholder
         }
     }
+
+@app.post("/validate", response_model=ProjectValidationResponse)
+async def validate_project(request: ProjectValidationRequest):
+    """
+    Validate a conda-project directory or git repository.
+    
+    Args:
+        request: ProjectValidationRequest with either project_path or git_url
+        
+    Returns:
+        ProjectValidationResponse with validation results
+    """
+    try:
+        if request.project_path:
+            # Validate local directory
+            validation_result = validate_conda_project(request.project_path)
+            return ProjectValidationResponse(**validation_result)
+            
+        elif request.git_url:
+            # Validate git repository
+            validation_result = validate_git_repository(request.git_url)
+            return ProjectValidationResponse(**validation_result)
+            
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either project_path or git_url must be provided"
+            )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Validation failed: {str(e)}"
+        )
+
+@app.post("/dockerfile", response_model=DockerfileGenerationResponse)
+async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
+    """
+    Generate a Dockerfile for a conda-project.
+    
+    Args:
+        request: DockerfileGenerationRequest with project details
+        
+    Returns:
+        DockerfileGenerationResponse with generated Dockerfile
+    """
+    temp_dir = None
+    try:
+        if request.git_url:
+            # Clone and validate git repository
+            validation_result = validate_git_repository(request.git_url)
+            project_path = validation_result["project_path"]
+            temp_dir = project_path  # Mark for cleanup
+            project_name = validation_result["project_name"]
+            
+        elif request.project_path:
+            # Validate local directory
+            validation_result = validate_conda_project(request.project_path)
+            project_path = validation_result["project_path"]
+            project_name = validation_result["project_name"]
+            
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either project_path or git_url must be provided"
+            )
+        
+        # Generate Dockerfile
+        dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
+        dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
+        
+        return DockerfileGenerationResponse(
+            success=True,
+            dockerfile_path=dockerfile_path,
+            dockerfile_content=dockerfile_content,
+            project_name=project_name,
+            message=f"Dockerfile generated successfully for {project_name}"
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dockerfile generation failed: {str(e)}"
+        )
+    finally:
+        # Clean up temporary directory if we cloned a git repo
+        if temp_dir and request.git_url:
+            cleanup_temp_directory(temp_dir)
+
+@app.post("/run")
+async def run_project(request: DockerfileGenerationRequest, background_tasks: BackgroundTasks):
+    """
+    Run a conda-project by generating Dockerfile and building/running container.
+    
+    This is a simplified version that generates the Dockerfile and returns
+    instructions for building and running the container.
+    
+    Args:
+        request: DockerfileGenerationRequest with project details
+        background_tasks: FastAPI background tasks
+        
+    Returns:
+        dict: Instructions for building and running the container
+    """
+    try:
+        # First generate the Dockerfile
+        dockerfile_response = await generate_dockerfile_endpoint(request)
+        
+        if not dockerfile_response.success:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to generate Dockerfile"
+            )
+        
+        # Return build and run instructions
+        project_name = dockerfile_response.project_name
+        dockerfile_path = dockerfile_response.dockerfile_path
+        
+        return {
+            "success": True,
+            "project_name": project_name,
+            "dockerfile_path": dockerfile_path,
+            "instructions": {
+                "build": f"docker build -t {project_name} -f {dockerfile_path} .",
+                "run": f"docker run -p 8000:8000 {project_name}",
+                "run_interactive": f"docker run -it -p 8000:8000 {project_name} /bin/bash"
+            },
+            "message": f"Project {project_name} is ready to build and run"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to prepare project for running: {str(e)}"
+        )
+
+@app.post("/containers/run", response_model=ContainerRunResponse)
+async def run_container(request: ContainerRunRequest):
+    """
+    Build and run a Docker container for a conda-project.
+    
+    Args:
+        request: ContainerRunRequest with project details and run options
+        
+    Returns:
+        ContainerRunResponse with container information
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    temp_dir = None
+    try:
+        # First validate and prepare the project
+        if request.git_url:
+            validation_result = validate_git_repository(request.git_url)
+            project_path = validation_result["project_path"]
+            temp_dir = project_path
+            project_name = validation_result["project_name"]
+        elif request.project_path:
+            validation_result = validate_conda_project(request.project_path)
+            project_path = validation_result["project_path"]
+            project_name = validation_result["project_name"]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either project_path or git_url must be provided"
+            )
+        
+        # Generate Dockerfile
+        dockerfile_path = os.path.join(project_path, "Dockerfile")
+        dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
+        write_dockerfile(project_path, dockerfile_path, request.custom_commands)
+        
+        # Build Docker image
+        build_result = container_manager.build_image(
+            project_path, project_name, dockerfile_path, request.custom_commands
+        )
+        
+        if not build_result["success"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to build Docker image: {build_result['error']}"
+            )
+        
+        # Run container
+        run_result = container_manager.run_container(
+            project_name=project_name,
+            ports=request.ports,
+            environment=request.environment,
+            command=request.command
+        )
+        
+        if not run_result["success"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to run container: {run_result['error']}"
+            )
+        
+        return ContainerRunResponse(**run_result)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to run container: {str(e)}"
+        )
+    finally:
+        # Clean up temporary directory if we cloned a git repo
+        if temp_dir and request.git_url:
+            cleanup_temp_directory(temp_dir)
+
+@app.get("/containers", response_model=Dict[str, Any])
+async def list_containers():
+    """
+    List all tracked containers.
+    
+    Returns:
+        Dictionary with container list
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    try:
+        result = container_manager.list_containers()
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list containers: {str(e)}"
+        )
+
+@app.get("/containers/{container_id}/status", response_model=ContainerStatusResponse)
+async def get_container_status(container_id: str):
+    """
+    Get the status of a specific container.
+    
+    Args:
+        container_id: ID of the container
+        
+    Returns:
+        ContainerStatusResponse with container status
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    try:
+        result = container_manager.get_container_status(container_id)
+        if not result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=result["message"]
+            )
+        return ContainerStatusResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get container status: {str(e)}"
+        )
+
+@app.get("/containers/{container_id}/logs", response_model=ContainerLogsResponse)
+async def get_container_logs(container_id: str, tail: int = 100):
+    """
+    Get logs from a specific container.
+    
+    Args:
+        container_id: ID of the container
+        tail: Number of lines to return
+        
+    Returns:
+        ContainerLogsResponse with container logs
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    try:
+        result = container_manager.get_container_logs(container_id, tail)
+        if not result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=result["message"]
+            )
+        return ContainerLogsResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get container logs: {str(e)}"
+        )
+
+@app.post("/containers/{container_id}/stop")
+async def stop_container(container_id: str):
+    """
+    Stop a running container.
+    
+    Args:
+        container_id: ID of the container to stop
+        
+    Returns:
+        Dictionary with stop results
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    try:
+        result = container_manager.stop_container(container_id)
+        if not result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=result["message"]
+            )
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to stop container: {str(e)}"
+        )
+
+@app.delete("/containers/{container_id}")
+async def remove_container(container_id: str):
+    """
+    Remove a container.
+    
+    Args:
+        container_id: ID of the container to remove
+        
+    Returns:
+        Dictionary with removal results
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    try:
+        result = container_manager.remove_container(container_id)
+        if not result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=result["message"]
+            )
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to remove container: {str(e)}"
+        )
+
+@app.post("/containers/cleanup")
+async def cleanup_containers():
+    """
+    Clean up stopped containers.
+    
+    Returns:
+        Dictionary with cleanup results
+    """
+    if container_manager is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Docker container manager not available"
+        )
+    
+    try:
+        result = container_manager.cleanup_stopped_containers()
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cleanup containers: {str(e)}"
+        )
 
 if __name__ == "__main__":
     # Get configuration from environment variables
