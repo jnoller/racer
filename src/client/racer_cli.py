@@ -274,14 +274,16 @@ def dockerfile(ctx, project_path: str, git_url: str, custom_commands: str):
 
 
 @cli.command()
+@click.option('--project-id', '-p', 'project_id',
+              help='Project ID to check status for')
 @click.option('--container-id', '-c', 'container_id',
-              help='Container ID to check status for')
-@click.option('--list', 'list_containers', is_flag=True,
-              help='List all running containers first')
+              help='Container ID to check status for (legacy)')
+@click.option('--list', 'list_projects', is_flag=True,
+              help='List all running projects first')
 @click.pass_context
-def status(ctx, container_id: str, list_containers: bool):
+def status(ctx, project_id: str, container_id: str, list_projects: bool):
     """
-    Check the status of a running project or list all containers.
+    Check the status of a running project or list all projects.
     """
     api_url = ctx.obj['api_url']
     timeout = ctx.obj['timeout']
@@ -290,50 +292,56 @@ def status(ctx, container_id: str, list_containers: bool):
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
         
-        # If list flag is set, show all containers
-        if list_containers:
-            containers_response = client._make_request('GET', '/containers')
-            if containers_response.get('success'):
-                containers = containers_response.get('containers', [])
-                if containers:
-                    click.echo("Running containers:")
-                    for container in containers:
-                        click.echo(f"  • {container['container_name']} ({container['container_id'][:12]})")
-                        click.echo(f"    Status: {container['status']}")
-                        click.echo(f"    Ports: {container.get('ports', {})}")
+        # If list flag is set, show all projects
+        if list_projects:
+            projects_response = client._make_request('GET', '/projects')
+            if projects_response.get('success'):
+                projects = projects_response.get('projects', [])
+                if projects:
+                    click.echo("Running projects:")
+                    for project in projects:
+                        click.echo(f"  • {project['project_name']} (ID: {project['project_id']})")
+                        click.echo(f"    Status: {project['status']}")
+                        click.echo(f"    Ports: {project.get('ports', {})}")
                         click.echo()
                 else:
-                    click.echo("No running containers found.")
+                    click.echo("No running projects found.")
             else:
-                click.echo(click.style("Failed to list containers", fg='red'), err=True)
+                click.echo(click.style("Failed to list projects", fg='red'), err=True)
             return
         
-        # If no container ID provided, list containers and ask user to choose
-        if not container_id:
-            containers_response = client._make_request('GET', '/containers')
-            if containers_response.get('success'):
-                containers = containers_response.get('containers', [])
-                if not containers:
-                    click.echo("No running containers found.")
+        # If no project ID or container ID provided, list projects and ask user to choose
+        if not project_id and not container_id:
+            projects_response = client._make_request('GET', '/projects')
+            if projects_response.get('success'):
+                projects = projects_response.get('projects', [])
+                if not projects:
+                    click.echo("No running projects found.")
                     click.echo("Use 'racer run' to start a project first.")
                     return
                 
-                if len(containers) == 1:
-                    container_id = containers[0]['container_id']
-                    click.echo(f"Checking status for container: {containers[0]['container_name']}")
+                if len(projects) == 1:
+                    project_id = projects[0]['project_id']
+                    click.echo(f"Checking status for project: {projects[0]['project_name']}")
                 else:
-                    click.echo("Multiple containers running. Please specify --container-id:")
-                    for i, container in enumerate(containers, 1):
-                        click.echo(f"  {i}. {container['container_name']} ({container['container_id'][:12]})")
+                    click.echo("Multiple projects running. Please specify --project-id:")
+                    for i, project in enumerate(projects, 1):
+                        click.echo(f"  {i}. {project['project_name']} (ID: {project['project_id']})")
                     return
             else:
-                click.echo(click.style("Failed to list containers", fg='red'), err=True)
+                click.echo(click.style("Failed to list projects", fg='red'), err=True)
                 return
         
         # Get project status
-        status_response = client._make_request('POST', '/project/status', json={
-            'container_id': container_id
-        })
+        if project_id:
+            status_response = client._make_request('POST', '/project/status-by-id', json={
+                'project_id': project_id
+            })
+        else:
+            # Legacy container ID support
+            status_response = client._make_request('POST', '/project/status', json={
+                'container_id': container_id
+            })
         
         if verbose:
             click.echo("Status response:")
@@ -382,6 +390,58 @@ def status(ctx, container_id: str, list_containers: bool):
                 click.echo(click.style("✗ Failed to get project status", fg='red'))
                 error_msg = status_response.get('message', 'Unknown error')
                 click.echo(f"Error: {error_msg}")
+                
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg='red'), err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed information')
+@click.pass_context
+def list_projects(ctx, verbose: bool):
+    """
+    List all running projects.
+    """
+    api_url = ctx.obj['api_url']
+    timeout = ctx.obj['timeout']
+    
+    try:
+        client = RacerAPIClient(base_url=api_url, timeout=timeout)
+        
+        # Get projects list
+        projects_response = client._make_request('GET', '/projects')
+        
+        if projects_response.get('success'):
+            projects = projects_response.get('projects', [])
+            message = projects_response.get('message', '')
+            
+            if verbose:
+                click.echo("Projects response:")
+                click.echo(json.dumps(projects_response, indent=2))
+            else:
+                if projects:
+                    click.echo(f"Running projects ({len(projects)}):")
+                    click.echo()
+                    for project in projects:
+                        click.echo(f"  • {project['project_name']}")
+                        click.echo(f"    ID: {project['project_id']}")
+                        click.echo(f"    Status: {project['status']}")
+                        click.echo(f"    Image: {project['image']}")
+                        click.echo(f"    Started: {project['started_at']}")
+                        if project.get('ports'):
+                            click.echo(f"    Ports: {project['ports']}")
+                        click.echo()
+                else:
+                    click.echo("No running projects found.")
+                    click.echo("Use 'racer run' to start a project first.")
+        else:
+            click.echo(click.style("Failed to list projects", fg='red'), err=True)
+            error_msg = projects_response.get('message', 'Unknown error')
+            click.echo(f"Error: {error_msg}")
                 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)

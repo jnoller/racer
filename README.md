@@ -119,10 +119,13 @@ racer validate --path /path/to/project
 # Generate Dockerfile for a project
 racer dockerfile --path /path/to/project
 
+# List running projects
+racer list-projects            # List all running projects
+
 # Check project status
-racer status                    # Check status of running projects
-racer status --list            # List all running containers
-racer status --container-id <id>  # Check specific container
+racer status                   # Check status of running projects
+racer status --project-id <id> # Check specific project by ID
+racer status --list            # List all running projects
 ```
 
 ### Admin Commands (`racerctl`)
@@ -157,7 +160,9 @@ The backend provides a RESTful API at `http://localhost:8000`:
 - `POST /validate` - Validate conda-project
 - `POST /dockerfile` - Generate Dockerfile
 - `POST /run` - Build and run project (legacy)
-- `POST /project/status` - Get comprehensive project status
+- `GET /projects` - List all running projects
+- `POST /project/status` - Get comprehensive project status by container ID
+- `POST /project/status-by-id` - Get comprehensive project status by project ID
 
 ### Container Management
 - `POST /containers/run` - Run container
@@ -234,17 +239,20 @@ racer validate --git https://github.com/user/repo.git
 racer dockerfile --path /path/to/project --output ./Dockerfile
 ```
 
-### 5. Check Project Status
+### 5. List and Check Project Status
 
 ```bash
+# List all running projects
+racer list-projects
+
 # Check status of running projects
 racer status
 
-# List all running containers
-racer status --list
+# Check specific project status
+racer status --project-id <project_id>
 
-# Check specific container status
-racer status --container-id <container_id>
+# List projects with status command
+racer status --list
 ```
 
 ### 6. Container Management

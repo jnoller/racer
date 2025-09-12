@@ -104,6 +104,9 @@ class ContainerLogsResponse(BaseModel):
 class ProjectStatusRequest(BaseModel):
     container_id: str
 
+class ProjectStatusByProjectIdRequest(BaseModel):
+    project_id: str
+
 class ProjectStatusResponse(BaseModel):
     success: bool
     container_id: str
@@ -114,6 +117,21 @@ class ProjectStatusResponse(BaseModel):
     ports: Dict[str, int]
     started_at: str
     image: str
+    message: str
+
+class ProjectInfo(BaseModel):
+    project_id: str
+    project_name: str
+    container_id: str
+    container_name: str
+    status: str
+    ports: Dict[str, int]
+    started_at: str
+    image: str
+
+class ProjectsListResponse(BaseModel):
+    success: bool
+    projects: List[ProjectInfo]
     message: str
 
 # Global variables for tracking
@@ -576,6 +594,64 @@ async def cleanup_containers():
             detail=f"Failed to cleanup containers: {str(e)}"
         )
 
+@app.get("/projects", response_model=ProjectsListResponse)
+async def list_projects():
+    """
+    List all running projects with user-friendly information.
+    """
+    try:
+        # Get all containers
+        containers_response = container_manager.list_containers()
+        if not containers_response["success"]:
+            return ProjectsListResponse(
+                success=False,
+                projects=[],
+                message=f"Failed to list containers: {containers_response.get('error', 'Unknown error')}"
+            )
+        
+        containers = containers_response.get("containers", [])
+        projects = []
+        
+        for container in containers:
+            # Extract project name from container name (remove racer- prefix and timestamp)
+            container_name = container.get("container_name", "")
+            project_name = container_name
+            if container_name.startswith("racer-"):
+                # Remove racer- prefix and timestamp suffix
+                parts = container_name.split("-")
+                if len(parts) >= 3:
+                    project_name = "-".join(parts[1:-1])  # Remove "racer" and timestamp
+                else:
+                    project_name = container_name[6:]  # Just remove "racer-"
+            
+            # Create project ID (short container ID for user reference)
+            container_id = container.get("container_id", "")
+            project_id = container_id[:12] if container_id else "unknown"
+            
+            project_info = ProjectInfo(
+                project_id=project_id,
+                project_name=project_name,
+                container_id=container_id,
+                container_name=container_name,
+                status=container.get("status", "unknown"),
+                ports=container.get("ports", {}),
+                started_at=container.get("started_at", ""),
+                image=container.get("image", "unknown")
+            )
+            projects.append(project_info)
+        
+        return ProjectsListResponse(
+            success=True,
+            projects=projects,
+            message=f"Found {len(projects)} running projects"
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list projects: {str(e)}"
+        )
+
 @app.post("/project/status", response_model=ProjectStatusResponse)
 async def get_project_status(request: ProjectStatusRequest):
     """
@@ -671,6 +747,61 @@ async def get_project_status(request: ProjectStatusRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get project status: {str(e)}"
+        )
+
+@app.post("/project/status-by-id", response_model=ProjectStatusResponse)
+async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
+    """
+    Get comprehensive status of a running project by project ID.
+    """
+    try:
+        project_id = request.project_id
+        
+        # First, get all projects to find the container ID
+        projects_response = await list_projects()
+        if not projects_response.success:
+            return ProjectStatusResponse(
+                success=False,
+                container_id="unknown",
+                container_name="unknown",
+                container_status="not_found",
+                app_health=None,
+                app_accessible=False,
+                ports={},
+                started_at="",
+                image="unknown",
+                message=f"Failed to list projects: {projects_response.message}"
+            )
+        
+        # Find the project by project_id
+        target_project = None
+        for project in projects_response.projects:
+            if project.project_id == project_id or project.project_id.startswith(project_id):
+                target_project = project
+                break
+        
+        if not target_project:
+            return ProjectStatusResponse(
+                success=False,
+                container_id="unknown",
+                container_name="unknown",
+                container_status="not_found",
+                app_health=None,
+                app_accessible=False,
+                ports={},
+                started_at="",
+                image="unknown",
+                message=f"Project with ID '{project_id}' not found"
+            )
+        
+        # Get detailed status using container ID
+        status_request = ProjectStatusRequest(container_id=target_project.container_id)
+        return await get_project_status(status_request)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get project status by ID: {str(e)}"
         )
 
 if __name__ == "__main__":
