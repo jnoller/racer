@@ -100,6 +100,20 @@ class ContainerLogsResponse(BaseModel):
     success: bool
     container_id: str
     logs: str
+
+class ProjectStatusRequest(BaseModel):
+    container_id: str
+
+class ProjectStatusResponse(BaseModel):
+    success: bool
+    container_id: str
+    container_name: str
+    container_status: str
+    app_health: Optional[Dict[str, Any]] = None
+    app_accessible: bool = False
+    ports: Dict[str, int]
+    started_at: str
+    image: str
     message: str
 
 # Global variables for tracking
@@ -560,6 +574,103 @@ async def cleanup_containers():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to cleanup containers: {str(e)}"
+        )
+
+@app.post("/project/status", response_model=ProjectStatusResponse)
+async def get_project_status(request: ProjectStatusRequest):
+    """
+    Get comprehensive status of a running project including container and app health.
+    """
+    try:
+        container_id = request.container_id
+        
+        # Get container status
+        container_status = container_manager.get_container_status(container_id)
+        if not container_status["success"]:
+            return ProjectStatusResponse(
+                success=False,
+                container_id=container_id,
+                container_name="unknown",
+                container_status="not_found",
+                app_health=None,
+                app_accessible=False,
+                ports={},
+                started_at="",
+                image="unknown",
+                message=f"Container not found: {container_status.get('error', 'Unknown error')}"
+            )
+        
+        # Extract container info
+        container_name = container_status["container_name"]
+        container_status_str = container_status["status"]
+        ports = container_status["ports"]
+        started_at = container_status["started_at"]
+        image = container_status["image"]
+        
+        # Check if container is running
+        if container_status_str != "running":
+            return ProjectStatusResponse(
+                success=True,
+                container_id=container_id,
+                container_name=container_name,
+                container_status=container_status_str,
+                app_health=None,
+                app_accessible=False,
+                ports=ports,
+                started_at=started_at,
+                image=image,
+                message=f"Container is {container_status_str}"
+            )
+        
+        # Try to check app health if container is running
+        app_health = None
+        app_accessible = False
+        
+        try:
+            import requests
+            import time
+            
+            # Find the internal port (usually 8000)
+            internal_port = None
+            for port_mapping in ports.values():
+                if isinstance(port_mapping, dict) and "8000/tcp" in port_mapping:
+                    internal_port = 8000
+                    break
+            
+            if internal_port:
+                # Try to reach the app's health endpoint
+                health_url = f"http://localhost:{list(ports.keys())[0]}/health"
+                
+                # Give the app a moment to start up
+                time.sleep(0.5)
+                
+                response = requests.get(health_url, timeout=5)
+                if response.status_code == 200:
+                    app_health = response.json()
+                    app_accessible = True
+                    
+        except Exception as e:
+            # App health check failed, but container is running
+            app_health = {"error": f"Health check failed: {str(e)}"}
+            app_accessible = False
+        
+        return ProjectStatusResponse(
+            success=True,
+            container_id=container_id,
+            container_name=container_name,
+            container_status=container_status_str,
+            app_health=app_health,
+            app_accessible=app_accessible,
+            ports=ports,
+            started_at=started_at,
+            image=image,
+            message="Project status retrieved successfully"
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get project status: {str(e)}"
         )
 
 if __name__ == "__main__":

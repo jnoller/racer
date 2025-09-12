@@ -274,10 +274,14 @@ def dockerfile(ctx, project_path: str, git_url: str, custom_commands: str):
 
 
 @cli.command()
+@click.option('--container-id', '-c', 'container_id',
+              help='Container ID to check status for')
+@click.option('--list', 'list_containers', is_flag=True,
+              help='List all running containers first')
 @click.pass_context
-def status(ctx):
+def status(ctx, container_id: str, list_containers: bool):
     """
-    Check the status of the Racer API server.
+    Check the status of a running project or list all containers.
     """
     api_url = ctx.obj['api_url']
     timeout = ctx.obj['timeout']
@@ -286,24 +290,98 @@ def status(ctx):
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
         
-        # Get health status
-        health_response = client._make_request('GET', '/health')
-        info_response = client._make_request('GET', '/')
+        # If list flag is set, show all containers
+        if list_containers:
+            containers_response = client._make_request('GET', '/containers')
+            if containers_response.get('success'):
+                containers = containers_response.get('containers', [])
+                if containers:
+                    click.echo("Running containers:")
+                    for container in containers:
+                        click.echo(f"  • {container['container_name']} ({container['container_id'][:12]})")
+                        click.echo(f"    Status: {container['status']}")
+                        click.echo(f"    Ports: {container.get('ports', {})}")
+                        click.echo()
+                else:
+                    click.echo("No running containers found.")
+            else:
+                click.echo(click.style("Failed to list containers", fg='red'), err=True)
+            return
+        
+        # If no container ID provided, list containers and ask user to choose
+        if not container_id:
+            containers_response = client._make_request('GET', '/containers')
+            if containers_response.get('success'):
+                containers = containers_response.get('containers', [])
+                if not containers:
+                    click.echo("No running containers found.")
+                    click.echo("Use 'racer run' to start a project first.")
+                    return
+                
+                if len(containers) == 1:
+                    container_id = containers[0]['container_id']
+                    click.echo(f"Checking status for container: {containers[0]['container_name']}")
+                else:
+                    click.echo("Multiple containers running. Please specify --container-id:")
+                    for i, container in enumerate(containers, 1):
+                        click.echo(f"  {i}. {container['container_name']} ({container['container_id'][:12]})")
+                    return
+            else:
+                click.echo(click.style("Failed to list containers", fg='red'), err=True)
+                return
+        
+        # Get project status
+        status_response = client._make_request('POST', '/project/status', json={
+            'container_id': container_id
+        })
         
         if verbose:
-            click.echo("Health response:")
-            click.echo(json.dumps(health_response, indent=2))
-            click.echo("\nInfo response:")
-            click.echo(json.dumps(info_response, indent=2))
+            click.echo("Status response:")
+            click.echo(json.dumps(status_response, indent=2))
         else:
-            if health_response.get('status') == 'healthy':
-                click.echo(click.style("✓ Racer API is healthy", fg='green'))
-                click.echo(f"Version: {info_response.get('version', 'unknown')}")
-                click.echo(f"Service: {info_response.get('service', 'unknown')}")
-                click.echo(f"Uptime: {info_response.get('uptime', 'unknown')}")
+            if status_response.get('success'):
+                container_name = status_response.get('container_name', 'unknown')
+                container_status = status_response.get('container_status', 'unknown')
+                app_accessible = status_response.get('app_accessible', False)
+                ports = status_response.get('ports', {})
+                started_at = status_response.get('started_at', 'unknown')
+                image = status_response.get('image', 'unknown')
+                
+                click.echo(f"Container: {container_name}")
+                click.echo(f"ID: {container_id[:12]}")
+                click.echo(f"Status: {container_status}")
+                click.echo(f"Image: {image}")
+                click.echo(f"Started: {started_at}")
+                
+                if ports:
+                    click.echo("Ports:")
+                    for host_port, container_port in ports.items():
+                        click.echo(f"  {host_port} -> {container_port}")
+                
+                # App health status
+                if container_status == 'running':
+                    if app_accessible:
+                        app_health = status_response.get('app_health', {})
+                        click.echo(click.style("✓ Application is accessible", fg='green'))
+                        if app_health:
+                            click.echo(f"App Status: {app_health.get('status', 'unknown')}")
+                            if 'service' in app_health:
+                                click.echo(f"Service: {app_health['service']}")
+                    else:
+                        click.echo(click.style("⚠ Application not accessible", fg='yellow'))
+                        app_health = status_response.get('app_health', {})
+                        if app_health and 'error' in app_health:
+                            click.echo(f"Error: {app_health['error']}")
+                else:
+                    click.echo(click.style(f"⚠ Container is {container_status}", fg='yellow'))
+                
+                message = status_response.get('message', '')
+                if message:
+                    click.echo(f"Message: {message}")
             else:
-                click.echo(click.style("✗ Racer API is not healthy", fg='red'))
-                click.echo(f"Status: {health_response.get('status', 'unknown')}")
+                click.echo(click.style("✗ Failed to get project status", fg='red'))
+                error_msg = status_response.get('message', 'Unknown error')
+                click.echo(f"Error: {error_msg}")
                 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
