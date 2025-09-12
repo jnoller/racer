@@ -126,6 +126,11 @@ racer list-projects            # List all running projects
 racer status                   # Check status of running projects
 racer status --project-id <id> # Check specific project by ID
 racer status --list            # List all running projects
+
+# Rerun a project
+racer rerun                    # Rerun the only running project
+racer rerun --project-id <id>  # Rerun specific project by ID
+racer rerun --list             # List projects before rerunning
 ```
 
 ### Admin Commands (`racerctl`)
@@ -163,6 +168,7 @@ The backend provides a RESTful API at `http://localhost:8000`:
 - `GET /projects` - List all running projects
 - `POST /project/status` - Get comprehensive project status by container ID
 - `POST /project/status-by-id` - Get comprehensive project status by project ID
+- `POST /project/rerun` - Rerun a project by stopping and restarting container
 
 ### Container Management
 - `POST /containers/run` - Run container
@@ -255,7 +261,23 @@ racer status --project-id <project_id>
 racer status --list
 ```
 
-### 6. Container Management
+### 6. Rerun Projects
+
+```bash
+# Rerun the only running project
+racer rerun
+
+# Rerun specific project
+racer rerun --project-id <project_id>
+
+# Rerun with custom configuration
+racer rerun --project-id <project_id> --ports 8080:8000 --environment DEBUG=true
+
+# List projects before rerunning
+racer rerun --list
+```
+
+### 7. Container Management
 
 ```bash
 # List running containers

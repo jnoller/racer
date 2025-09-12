@@ -451,5 +451,136 @@ def list_projects(ctx, verbose: bool):
         ctx.exit(1)
 
 
+@cli.command()
+@click.option('--project-id', '-p', 'project_id',
+              help='Project ID to rerun')
+@click.option('--custom-commands', '-c', 
+              help='Custom RUN commands to add to Dockerfile (comma-separated)')
+@click.option('--ports', '-P', 
+              help='Port mappings (format: host:container, e.g., 8080:8000)')
+@click.option('--environment', '-e', 
+              help='Environment variables (format: KEY=VALUE, comma-separated)')
+@click.option('--command', 
+              help='Override the default command to run')
+@click.option('--list', 'list_projects', is_flag=True,
+              help='List all running projects first')
+@click.pass_context
+def rerun(ctx, project_id: str, custom_commands: str, ports: str, environment: str, command: str, list_projects: bool):
+    """
+    Rerun a project by stopping the existing container and starting a new one.
+    """
+    api_url = ctx.obj['api_url']
+    timeout = ctx.obj['timeout']
+    verbose = ctx.obj['verbose']
+    
+    try:
+        client = RacerAPIClient(base_url=api_url, timeout=timeout)
+        
+        # If list flag is set, show all projects
+        if list_projects:
+            projects_response = client._make_request('GET', '/projects')
+            if projects_response.get('success'):
+                projects = projects_response.get('projects', [])
+                if projects:
+                    click.echo("Running projects:")
+                    for project in projects:
+                        click.echo(f"  • {project['project_name']} (ID: {project['project_id']})")
+                        click.echo(f"    Status: {project['status']}")
+                        click.echo(f"    Ports: {project.get('ports', {})}")
+                        click.echo()
+                else:
+                    click.echo("No running projects found.")
+            else:
+                click.echo(click.style("Failed to list projects", fg='red'), err=True)
+            return
+        
+        # If no project ID provided, list projects and ask user to choose
+        if not project_id:
+            projects_response = client._make_request('GET', '/projects')
+            if projects_response.get('success'):
+                projects = projects_response.get('projects', [])
+                if not projects:
+                    click.echo("No running projects found.")
+                    click.echo("Use 'racer run' to start a project first.")
+                    return
+                
+                if len(projects) == 1:
+                    project_id = projects[0]['project_id']
+                    click.echo(f"Rerunning project: {projects[0]['project_name']}")
+                else:
+                    click.echo("Multiple projects running. Please specify --project-id:")
+                    for i, project in enumerate(projects, 1):
+                        click.echo(f"  {i}. {project['project_name']} (ID: {project['project_id']})")
+                    return
+            else:
+                click.echo(click.style("Failed to list projects", fg='red'), err=True)
+                return
+        
+        # Prepare request data
+        request_data = {'project_id': project_id}
+        
+        if custom_commands:
+            request_data['custom_commands'] = [cmd.strip() for cmd in custom_commands.split(',')]
+        
+        if ports:
+            # Parse port mappings
+            port_mappings = {}
+            for port_mapping in ports.split(','):
+                if ':' in port_mapping:
+                    host_port, container_port = port_mapping.split(':', 1)
+                    port_mappings[host_port.strip()] = container_port.strip()
+            request_data['ports'] = port_mappings
+        
+        if environment:
+            # Parse environment variables
+            env_vars = {}
+            for env_var in environment.split(','):
+                if '=' in env_var:
+                    key, value = env_var.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+            request_data['environment'] = env_vars
+        
+        if command:
+            request_data['command'] = command
+        
+        # Make API request
+        response = client._make_request('POST', '/project/rerun', json=request_data)
+        
+        if verbose:
+            click.echo("Rerun response:")
+            click.echo(json.dumps(response, indent=2))
+        else:
+            if response.get('success'):
+                old_container_id = response.get('old_container_id', 'unknown')
+                new_container_id = response.get('new_container_id', 'unknown')
+                new_container_name = response.get('new_container_name', 'unknown')
+                ports_info = response.get('ports', {})
+                message = response.get('message', '')
+                
+                click.echo(click.style("✓ Project rerun successful", fg='green'))
+                click.echo(f"Old container: {old_container_id[:12]}")
+                click.echo(f"New container: {new_container_id[:12]}")
+                click.echo(f"Container name: {new_container_name}")
+                
+                if ports_info:
+                    click.echo("Ports:")
+                    for host_port, container_port in ports_info.items():
+                        click.echo(f"  {host_port} -> {container_port}")
+                
+                if message:
+                    click.echo(f"Message: {message}")
+            else:
+                click.echo(click.style("✗ Project rerun failed", fg='red'))
+                error_msg = response.get('message', 'Unknown error')
+                click.echo(f"Error: {error_msg}")
+                
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg='red'), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg='red'), err=True)
+        ctx.exit(1)
+
+
 if __name__ == '__main__':
     cli()

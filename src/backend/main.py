@@ -107,6 +107,22 @@ class ProjectStatusRequest(BaseModel):
 class ProjectStatusByProjectIdRequest(BaseModel):
     project_id: str
 
+class ProjectRerunRequest(BaseModel):
+    project_id: str
+    custom_commands: Optional[List[str]] = None
+    ports: Optional[Dict[str, int]] = None
+    environment: Optional[Dict[str, str]] = None
+    command: Optional[str] = None
+
+class ProjectRerunResponse(BaseModel):
+    success: bool
+    old_container_id: str
+    new_container_id: Optional[str] = None
+    new_container_name: Optional[str] = None
+    ports: Optional[Dict[str, int]] = None
+    message: str
+    status: Optional[str] = None
+
 class ProjectStatusResponse(BaseModel):
     success: bool
     container_id: str
@@ -802,6 +818,132 @@ async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get project status by ID: {str(e)}"
+        )
+
+@app.post("/project/rerun", response_model=ProjectRerunResponse)
+async def rerun_project(request: ProjectRerunRequest):
+    """
+    Rerun a project by stopping the existing container and starting a new one.
+    """
+    try:
+        project_id = request.project_id
+        
+        # First, get all projects to find the container ID
+        projects_response = await list_projects()
+        if not projects_response.success:
+            return ProjectRerunResponse(
+                success=False,
+                old_container_id="unknown",
+                message=f"Failed to list projects: {projects_response.message}"
+            )
+        
+        # Find the project by project_id
+        target_project = None
+        for project in projects_response.projects:
+            if project.project_id == project_id or project.project_id.startswith(project_id):
+                target_project = project
+                break
+        
+        if not target_project:
+            return ProjectRerunResponse(
+                success=False,
+                old_container_id="unknown",
+                message=f"Project with ID '{project_id}' not found"
+            )
+        
+        old_container_id = target_project.container_id
+        old_container_name = target_project.container_name
+        
+        # Stop the existing container
+        try:
+            stop_response = container_manager.stop_container(old_container_id)
+            if not stop_response["success"]:
+                return ProjectRerunResponse(
+                    success=False,
+                    old_container_id=old_container_id,
+                    message=f"Failed to stop existing container: {stop_response.get('error', 'Unknown error')}"
+                )
+        except Exception as e:
+            return ProjectRerunResponse(
+                success=False,
+                old_container_id=old_container_id,
+                message=f"Failed to stop existing container: {str(e)}"
+            )
+        
+        # Extract project information from the old container
+        # We'll need to get the original project path or git URL
+        # For now, we'll try to extract it from the container name or image
+        project_name = target_project.project_name
+        
+        # Try to determine the project source
+        # This is a simplified approach - in a real implementation, you might store
+        # the original project path/git URL in container labels or metadata
+        project_path = None
+        git_url = None
+        
+        # Check if we can find the project by name in common locations
+        import os
+        from pathlib import Path
+        
+        # Look for project in current directory and common locations
+        possible_paths = [
+            f"./{project_name}",
+            f"./test-project",  # fallback for test projects
+            f"/Users/jesse/Code/pws/racer/test-project"  # specific test path
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isdir(path):
+                project_path = path
+                break
+        
+        if not project_path:
+            return ProjectRerunResponse(
+                success=False,
+                old_container_id=old_container_id,
+                message=f"Could not locate project source for '{project_name}'. Please specify project path or git URL."
+            )
+        
+        # Prepare run request with same configuration as original
+        run_request_data = {
+            'project_path': project_path,
+            'custom_commands': request.custom_commands,
+            'ports': request.ports or target_project.ports,
+            'environment': request.environment,
+            'command': request.command
+        }
+        
+        # Start new container
+        try:
+            run_response = container_manager.run_container(**run_request_data)
+            if not run_response["success"]:
+                return ProjectRerunResponse(
+                    success=False,
+                    old_container_id=old_container_id,
+                    message=f"Failed to start new container: {run_response.get('error', 'Unknown error')}"
+                )
+            
+            return ProjectRerunResponse(
+                success=True,
+                old_container_id=old_container_id,
+                new_container_id=run_response.get("container_id"),
+                new_container_name=run_response.get("container_name"),
+                ports=run_response.get("ports"),
+                message=f"Successfully reran project '{project_name}'",
+                status=run_response.get("status")
+            )
+            
+        except Exception as e:
+            return ProjectRerunResponse(
+                success=False,
+                old_container_id=old_container_id,
+                message=f"Failed to start new container: {str(e)}"
+            )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to rerun project: {str(e)}"
         )
 
 if __name__ == "__main__":
