@@ -20,6 +20,7 @@ from pathlib import Path
 from project_validator import validate_conda_project, validate_git_repository, cleanup_temp_directory
 from dockerfile_template import generate_dockerfile, write_dockerfile
 from docker_manager import ContainerManager
+from compose_template import generate_compose_file, write_compose_file
 
 # Create FastAPI application
 app = FastAPI(
@@ -140,6 +141,7 @@ class ProjectScaleResponse(BaseModel):
     requested_instances: int
     created_instances: int
     containers: List[Dict[str, Any]]
+    compose_file: Optional[str] = None
     message: str
 
 class ProjectStatusResponse(BaseModel):
@@ -1017,7 +1019,7 @@ async def rerun_project(request: ProjectRerunRequest):
 @app.post("/project/scale", response_model=ProjectScaleResponse)
 async def scale_project(request: ProjectScaleRequest):
     """
-    Scale a project to run multiple instances.
+    Scale a project to run multiple instances using Docker Compose.
     """
     try:
         project_name = request.project_name
@@ -1051,114 +1053,107 @@ async def scale_project(request: ProjectScaleRequest):
             # For git URLs, we'll validate during container creation
             pass
         
-        created_containers = []
-        failed_containers = []
+        # Generate Dockerfile first
+        if project_path:
+            dockerfile_response = generate_dockerfile(
+                project_path=project_path,
+                custom_commands=request.custom_commands
+            )
+            
+            # Write Dockerfile
+            dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
         
-        # Create multiple instances
-        for i in range(instances):
-            try:
-                # Generate unique container name
-                container_name = f"{project_name}-{i+1}"
-                
-                # First, we need to build the image if project_path is provided
-                if project_path:
-                    # Generate Dockerfile
-                    dockerfile_response = generate_dockerfile(
-                        project_path=project_path,
-                        custom_commands=request.custom_commands
-                    )
-                    
-                    # Write Dockerfile
-                    dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
-                    
-                    # Build image
-                    build_response = container_manager.build_image(
-                        project_path=project_path,
-                        project_name=project_name,
-                        dockerfile_path=dockerfile_path
-                    )
-                    
-                    if not build_response["success"]:
-                        failed_containers.append({
-                            'instance': i + 1,
-                            'error': f"Failed to build image: {build_response.get('error', 'Unknown error')}"
-                        })
-                        continue
-                
-                # Prepare run request with instance-specific ports
-                instance_ports = {}
-                if request.ports:
-                    # Assign different ports to each instance
-                    for port_mapping, container_port in request.ports.items():
-                        if isinstance(port_mapping, str) and port_mapping.endswith('/tcp'):
-                            # Extract base port number
-                            base_port = int(port_mapping.split('/')[0])
-                            instance_port = base_port + i
-                            # Docker port mapping: container_port -> host_port
-                            instance_ports[f"{container_port}/tcp"] = instance_port
-                        else:
-                            # Use port as-is for this instance
-                            instance_ports[port_mapping] = container_port
-                else:
-                    # Default port mapping
-                    instance_ports = {"8000/tcp": 8000}
-                
-                # Debug output
-                print(f"Instance {i+1}: ports = {instance_ports}")
-                
-                run_request_data = {
-                    'project_name': project_name,
-                    'ports': instance_ports,
-                    'environment': request.environment,
-                    'command': request.command
-                }
-                
-                # Run container
-                run_response = container_manager.run_container(**run_request_data)
-                
-                if run_response["success"]:
-                    container_info = {
-                        'container_id': run_response.get("container_id"),
-                        'container_name': run_response.get("container_name"),
-                        'ports': run_response.get("ports", {}),
-                        'status': run_response.get("status", "running"),
-                        'instance': i + 1
-                    }
-                    created_containers.append(container_info)
-                else:
-                    failed_containers.append({
-                        'instance': i + 1,
-                        'error': run_response.get('error', 'Unknown error')
-                    })
-                    
-            except Exception as e:
-                failed_containers.append({
-                    'instance': i + 1,
-                    'error': str(e)
-                })
-        
-        # Prepare response
-        success = len(created_containers) > 0
-        message_parts = []
-        
-        if created_containers:
-            message_parts.append(f"Successfully created {len(created_containers)} instance(s)")
-        
-        if failed_containers:
-            message_parts.append(f"Failed to create {len(failed_containers)} instance(s)")
-            for failure in failed_containers:
-                message_parts.append(f"  Instance {failure['instance']}: {failure['error']}")
-        
-        message = "; ".join(message_parts)
-        
-        return ProjectScaleResponse(
-            success=success,
+        # Generate Docker Compose file
+        compose_content = generate_compose_file(
             project_name=project_name,
-            requested_instances=instances,
-            created_instances=len(created_containers),
-            containers=created_containers,
-            message=message
+            project_path=project_path or ".",
+            instances=instances,
+            ports=request.ports,
+            environment=request.environment,
+            command=request.command,
+            custom_commands=request.custom_commands,
+            use_load_balancer=False  # Use port range instead of load balancer
         )
+        
+        # Write Docker Compose file
+        compose_file_path = write_compose_file(project_path or ".", compose_content)
+        
+        # Use Docker Compose to scale the service
+        import subprocess
+        import os
+        
+        # Change to project directory
+        original_cwd = os.getcwd()
+        os.chdir(project_path or ".")
+        
+        try:
+            # Stop any existing services
+            subprocess.run(["docker-compose", "down"], capture_output=True, text=True)
+            
+            # Build and start all services
+            scale_cmd = ["docker-compose", "up", "-d", "--build"]
+            result = subprocess.run(scale_cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                return ProjectScaleResponse(
+                    success=False,
+                    project_name=project_name,
+                    requested_instances=instances,
+                    created_instances=0,
+                    containers=[],
+                    compose_file=compose_file_path,
+                    message=f"Docker Compose failed: {result.stderr}"
+                )
+            
+            # Get running containers
+            ps_result = subprocess.run(["docker-compose", "ps", "--format", "json"], 
+                                     capture_output=True, text=True)
+            
+            created_containers = []
+            if ps_result.returncode == 0:
+                import json
+                try:
+                    containers_data = json.loads(ps_result.stdout)
+                    if not isinstance(containers_data, list):
+                        containers_data = [containers_data]
+                    
+                    for i, container in enumerate(containers_data):
+                        if container.get("State") == "running":
+                            container_info = {
+                                'container_id': container.get("ID", "")[:12],
+                                'container_name': container.get("Name", ""),
+                                'ports': request.ports or {"8000": 8000},
+                                'status': container.get("State", "unknown"),
+                                'instance': i + 1
+                            }
+                            created_containers.append(container_info)
+                except json.JSONDecodeError:
+                    # Fallback if JSON parsing fails
+                    created_containers = [{
+                        'container_id': 'unknown',
+                        'container_name': f"{project_name}_{i+1}",
+                        'ports': request.ports or {"8000": 8000},
+                        'status': 'running',
+                        'instance': i + 1
+                    } for i in range(instances)]
+            
+            # Prepare response
+            success = len(created_containers) > 0
+            message = f"Successfully scaled {project_name} to {len(created_containers)} instance(s) using Docker Compose"
+            
+            return ProjectScaleResponse(
+                success=success,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=len(created_containers),
+                containers=created_containers,
+                compose_file=compose_file_path,
+                message=message
+            )
+            
+        finally:
+            # Restore original working directory
+            os.chdir(original_cwd)
         
     except Exception as e:
         raise HTTPException(
