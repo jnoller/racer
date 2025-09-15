@@ -203,9 +203,9 @@ variables: {}
                 "message": "Project rerun successful"
             }
             
-            # Run the command
+            # Run the command with project-name (updated interface)
             result = subprocess.run(
-                ["racer", "rerun", "--project-id", "test-project-123"],
+                ["racer", "rerun", "--project-name", "test-project"],
                 capture_output=True,
                 text=True
             )

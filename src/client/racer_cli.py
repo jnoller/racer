@@ -1205,7 +1205,9 @@ def rerun(
                         for port_mapping in ports.split(","):
                             if ":" in port_mapping:
                                 host_port, container_port = port_mapping.split(":", 1)
-                                port_mappings[host_port.strip()] = container_port.strip()
+                                port_mappings[
+                                    host_port.strip()
+                                ] = container_port.strip()
                         request_data["ports"] = port_mappings
 
                     if environment:
@@ -1221,7 +1223,9 @@ def rerun(
                         request_data["command"] = command
 
                     # Make API request for this instance
-                    response = client._make_request("POST", "/project/rerun", json=request_data)
+                    response = client._make_request(
+                        "POST", "/project/rerun", json=request_data
+                    )
 
                     if response.get("success"):
                         success_count += 1
@@ -1244,7 +1248,9 @@ def rerun(
                             err=True,
                         )
 
-                click.echo(f"\nRerun completed: {success_count}/{len(matching_projects)} instances successful")
+                click.echo(
+                    f"\nRerun completed: {success_count}/{len(matching_projects)} instances successful"
+                )
                 return
 
             # Single instance - prepare request data
@@ -1283,7 +1289,9 @@ def rerun(
             response = client._make_request("POST", "/project/rerun", json=request_data)
 
             if response.get("success"):
-                click.echo(click.style("✓ Project rerun initiated successfully", fg="green"))
+                click.echo(
+                    click.style("✓ Project rerun initiated successfully", fg="green")
+                )
                 if verbose:
                     click.echo(f"Response: {response}")
             else:
@@ -1305,6 +1313,7 @@ def rerun(
     except Exception as e:
         click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
         ctx.exit(1)
+
 
 if __name__ == "__main__":
     cli()
