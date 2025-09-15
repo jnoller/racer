@@ -307,28 +307,55 @@ class ContainerManager:
             Dictionary with container status
         """
         try:
-            if container_id not in self.running_containers:
-                return {
-                    "success": False,
-                    "error": "Container not found",
-                    "message": f"Container {container_id} not found",
-                }
-
-            container_info = self.running_containers[container_id]
-            container = container_info["container"]
+            # First check if it's a tracked container
+            if container_id in self.running_containers:
+                container_info = self.running_containers[container_id]
+                container = container_info["container"]
+                ports = container_info["ports"]
+            else:
+                # Try to get container directly from Docker (for Docker Compose managed containers)
+                try:
+                    container = self.client.containers.get(container_id)
+                    # For Docker Compose containers, we need to extract ports from container info
+                    ports = {}
+                    if container.attrs.get("NetworkSettings", {}).get("Ports"):
+                        for container_port, host_bindings in container.attrs["NetworkSettings"]["Ports"].items():
+                            if host_bindings:
+                                for binding in host_bindings:
+                                    host_port = binding.get("HostPort", "")
+                                    if host_port:
+                                        ports[f"{host_port}/tcp"] = int(container_port.split("/")[0])
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "error": "Container not found",
+                        "message": f"Container {container_id} not found: {str(e)}",
+                    }
 
             # Refresh container info
             container.reload()
+
+            # Get additional info based on container type
+            if container_id in self.running_containers:
+                container_info = self.running_containers[container_id]
+                environment = container_info["environment"]
+                started_at = container_info["started_at"]
+                stopped_at = container_info.get("stopped_at")
+            else:
+                # For Docker Compose containers, use default values
+                environment = {}
+                started_at = ""
+                stopped_at = None
 
             return {
                 "success": True,
                 "container_id": container_id,
                 "container_name": container.name,
                 "status": container.status,
-                "ports": container_info["ports"],
-                "environment": container_info["environment"],
-                "started_at": container_info["started_at"],
-                "stopped_at": container_info.get("stopped_at"),
+                "ports": ports,
+                "environment": environment,
+                "started_at": started_at,
+                "stopped_at": stopped_at,
                 "image": container.image.tags[0]
                 if container.image.tags
                 else container.image.id,

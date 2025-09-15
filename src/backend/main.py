@@ -136,6 +136,7 @@ class ProjectStatusByProjectNameRequest(BaseModel):
 class ProjectStatusRequest(BaseModel):
     project_id: Optional[str] = None
     project_name: Optional[str] = None
+    container_id: Optional[str] = None
 
 
 class ProjectRerunRequest(BaseModel):
@@ -670,76 +671,146 @@ async def cleanup_containers():
 async def list_projects():
     """
     List all running projects with user-friendly information.
+    Includes both tracked containers and Docker Compose managed containers.
     """
     try:
-        # Get all containers
-        containers_response = container_manager.list_containers()
-        if not containers_response["success"]:
-            return ProjectsListResponse(
-                success=False,
-                projects=[],
-                message=f"Failed to list containers: {containers_response.get('error', 'Unknown error')}",
-            )
-
-        containers = containers_response.get("containers", [])
         projects = []
+        
+        # 1. Get tracked containers from ContainerManager
+        containers_response = container_manager.list_containers()
+        if containers_response["success"]:
+            containers = containers_response.get("containers", [])
+            for container in containers:
+                container_name = container.get("container_name", "")
+                container_id = container.get("container_id", "")
 
-        for container in containers:
-            container_name = container.get("container_name", "")
-            container_id = container.get("container_id", "")
+                # Try to get project name from database first
+                project_name = container_name  # fallback
+                if db_manager:
+                    try:
+                        db_container = db_manager.get_container(container_id)
+                        if db_container and db_container.project:
+                            project_name = db_container.project.name
+                    except Exception:
+                        # If database lookup fails, fall back to container name extraction
+                        pass
 
-            # Try to get project name from database first
-            project_name = container_name  # fallback
-            if db_manager:
-                try:
-                    db_container = db_manager.get_container(container_id)
-                    if db_container and db_container.project:
-                        project_name = db_container.project.name
-                except Exception:
-                    # If database lookup fails, fall back to container name extraction
-                    pass
+                # If database lookup failed or not available, extract from container name
+                if project_name == container_name:
+                    # Try to extract project name from various naming patterns
+                    if container_name.startswith("racer-"):
+                        # Remove racer- prefix and timestamp suffix
+                        parts = container_name.split("-")
+                        if len(parts) >= 3:
+                            project_name = "-".join(
+                                parts[1:-1]
+                            )  # Remove "racer" and timestamp
+                        else:
+                            project_name = container_name[6:]  # Just remove "racer-"
+                    elif "-" in container_name:
+                        # Handle patterns like "readme-test-1757950934-29c6dc53"
+                        # Extract the base project name (everything before the first timestamp)
+                        parts = container_name.split("-")
+                        if len(parts) >= 3:
+                            # Find the first part that looks like a timestamp (all digits)
+                            project_parts = []
+                            for part in parts:
+                                if part.isdigit() and len(part) > 8:  # Timestamp-like
+                                    break
+                                project_parts.append(part)
+                            if project_parts:
+                                project_name = "-".join(project_parts)
 
-            # If database lookup failed or not available, extract from container name
-            if project_name == container_name:
-                # Try to extract project name from various naming patterns
-                if container_name.startswith("racer-"):
-                    # Remove racer- prefix and timestamp suffix
-                    parts = container_name.split("-")
-                    if len(parts) >= 3:
-                        project_name = "-".join(
-                            parts[1:-1]
-                        )  # Remove "racer" and timestamp
-                    else:
-                        project_name = container_name[6:]  # Just remove "racer-"
-                elif "-" in container_name:
-                    # For scale command containers: project-name-timestamp-uuid
-                    # Extract the base project name (everything before the first timestamp)
-                    parts = container_name.split("-")
-                    if len(parts) >= 3:
-                        # Find the first part that looks like a timestamp (all digits)
-                        project_parts = []
-                        for part in parts:
-                            if part.isdigit() and len(part) > 8:  # Timestamp-like
-                                break
-                            project_parts.append(part)
-                        if project_parts:
-                            project_name = "-".join(project_parts)
+                # Create project ID (short container ID for user reference)
+                project_id = container_id[:12] if container_id else "unknown"
 
-            # Create project ID (short container ID for user reference)
-            container_id = container.get("container_id", "")
-            project_id = container_id[:12] if container_id else "unknown"
+                project_info = ProjectInfo(
+                    project_id=project_id,
+                    project_name=project_name,
+                    container_id=container_id,
+                    container_name=container_name,
+                    status=container.get("status", "unknown"),
+                    ports=container.get("ports", {}),
+                    started_at=container.get("started_at", ""),
+                    image=container.get("image", "unknown"),
+                )
+                projects.append(project_info)
 
-            project_info = ProjectInfo(
-                project_id=project_id,
-                project_name=project_name,
-                container_id=container_id,
-                container_name=container_name,
-                status=container.get("status", "unknown"),
-                ports=container.get("ports", {}),
-                started_at=container.get("started_at", ""),
-                image=container.get("image", "unknown"),
+        # 2. Get Docker Compose managed containers
+        try:
+            import subprocess
+            import json
+            
+            # Get all running Docker containers
+            result = subprocess.run(
+                ["docker", "ps", "--format", "json"],
+                capture_output=True,
+                text=True
             )
-            projects.append(project_info)
+            
+            if result.returncode == 0:
+                # Parse each line as a separate JSON object
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        try:
+                            container_data = json.loads(line)
+                            container_name = container_data.get("Names", "")
+                            container_id = container_data.get("ID", "")
+                            
+                            # Check if this is a Docker Compose managed container
+                            # (not already tracked by ContainerManager)
+                            if container_name and container_id:
+                                # Check if this container is already in our projects list
+                                already_tracked = any(
+                                    p.container_id == container_id or p.container_name == container_name 
+                                    for p in projects
+                                )
+                                
+                                if not already_tracked:
+                                    # Extract project name from container name
+                                    project_name = container_name
+                                    
+                                    # Handle Docker Compose naming patterns
+                                    if "test-project-" in container_name:
+                                        # Extract project name from patterns like "test-project-debug-test-1"
+                                        parts = container_name.split("-")
+                                        if len(parts) >= 4:  # test-project-debug-test-1
+                                            project_name = "-".join(parts[2:-1])  # debug-test
+                                    elif "_" in container_name:
+                                        # Handle patterns like "final-scale-test_1"
+                                        project_name = container_name.split("_")[0]
+                                    
+                                    # Get ports from container data
+                                    ports = {}
+                                    ports_str = container_data.get("Ports", "")
+                                    if ports_str:
+                                        # Parse port mappings like "0.0.0.0:9001->8000/tcp"
+                                        for port_mapping in ports_str.split(", "):
+                                            if "->" in port_mapping:
+                                                host_port, container_port = port_mapping.split("->")
+                                                if ":" in host_port:
+                                                    host_port = host_port.split(":")[1]
+                                                container_port = container_port.split("/")[0]
+                                                ports[f"{host_port}/tcp"] = int(container_port)
+                                    
+                                    project_info = ProjectInfo(
+                                        project_id=container_id[:12],
+                                        project_name=project_name,
+                                        container_id=container_id,
+                                        container_name=container_name,
+                                        status="running",
+                                        ports=ports,
+                                        started_at="",  # Not available from docker ps
+                                        image=container_data.get("Image", "unknown"),
+                                    )
+                                    projects.append(project_info)
+                                    
+                        except json.JSONDecodeError:
+                            continue
+                            
+        except Exception as e:
+            # If Docker Compose container detection fails, continue with tracked containers only
+            print(f"Warning: Could not detect Docker Compose containers: {e}")
 
         return ProjectsListResponse(
             success=True,
@@ -761,9 +832,10 @@ async def get_project_status(request: ProjectStatusRequest):
     try:
         project_id = request.project_id
         project_name = request.project_name
+        container_id = request.container_id
 
-        # Validate that either project_id or project_name is provided
-        if not project_id and not project_name:
+        # Validate that at least one identifier is provided
+        if not project_id and not project_name and not container_id:
             return ProjectStatusResponse(
                 success=False,
                 container_id="unknown",
@@ -774,7 +846,7 @@ async def get_project_status(request: ProjectStatusRequest):
                 ports={},
                 started_at="",
                 image="unknown",
-                message="Either project_id or project_name must be provided",
+                message="Either project_id, project_name, or container_id must be provided",
             )
 
         # First, get all projects to find the container ID
@@ -793,10 +865,16 @@ async def get_project_status(request: ProjectStatusRequest):
                 message=f"Failed to list projects: {projects_response.message}",
             )
 
-        # Find the project by project_id or project_name
+        # Find the project by project_id, project_name, or container_id
         target_project = None
         for project in projects_response.projects:
-            if project_id and (
+            if container_id and (
+                project.container_id == container_id
+                or project.container_id.startswith(container_id)
+            ):
+                target_project = project
+                break
+            elif project_id and (
                 project.project_id == project_id
                 or project.project_id.startswith(project_id)
             ):
@@ -809,7 +887,7 @@ async def get_project_status(request: ProjectStatusRequest):
         if not target_project:
             return ProjectStatusResponse(
                 success=False,
-                container_id="unknown",
+                container_id=container_id or "unknown",
                 container_name="unknown",
                 container_status="not_found",
                 app_health=None,
@@ -1239,10 +1317,12 @@ async def scale_project(request: ProjectScaleRequest):
                 import json
 
                 try:
-                    containers_data = json.loads(ps_result.stdout)
-                    if not isinstance(containers_data, list):
-                        containers_data = [containers_data]
-
+                    # Parse each line as a separate JSON object
+                    containers_data = []
+                    for line in ps_result.stdout.strip().split('\n'):
+                        if line.strip():
+                            containers_data.append(json.loads(line))
+                    
                     for i, container in enumerate(containers_data):
                         if container.get("State") == "running":
                             container_info = {
@@ -1265,6 +1345,9 @@ async def scale_project(request: ProjectScaleRequest):
                         }
                         for i in range(instances)
                     ]
+
+            # Note: Container tracking for scaled projects is handled by the list_projects endpoint
+            # which checks both tracked containers and Docker Compose managed containers
 
             # Prepare response
             success = len(created_containers) > 0
