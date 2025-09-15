@@ -117,7 +117,7 @@ racerctl server start --port 8002
 
 ```bash
 # Test the API health
-curl http://localhost:8000/health
+curl http://localhost:8001/health
 
 # Test the CLI
 racer --help
@@ -700,7 +700,7 @@ All configuration can be overridden via command-line options or environment vari
 
 ```bash
 # Check API health
-curl http://localhost:8000/health
+curl http://localhost:8001/health
 
 # Check CLI help
 racer --help
