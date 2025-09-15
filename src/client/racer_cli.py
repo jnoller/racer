@@ -4,7 +4,7 @@ Racer CLI - User-facing commands for running conda-projects.
 
 import click
 import json
-from .api import RacerAPIClient, RacerAPIError
+from api import RacerAPIClient, RacerAPIError
 
 
 @click.group()

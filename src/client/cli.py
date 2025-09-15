@@ -5,7 +5,7 @@ RacerCTL - Admin CLI for the Racer deployment system.
 import click
 import json
 import os
-from .api import RacerAPIClient, RacerAPIError
+from api import RacerAPIClient, RacerAPIError
 
 
 # Global configuration
