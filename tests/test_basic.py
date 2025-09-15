@@ -41,7 +41,7 @@ variables: {}
         assert "FROM continuumio/miniconda3" in result
         assert "conda install conda-forge::conda-project" in result
         assert "COPY . /project" in result
-        assert '["conda", "project", "prepare"' in result
+        assert 'conda project install --force' in result
 
 
 def test_dockerfile_generation_with_custom_commands():
