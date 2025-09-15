@@ -1,13 +1,15 @@
 # Racer - Rapid deployment system for conda-projects
 # Makefile for development and deployment automation
 
-.PHONY: help setup clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset
+.PHONY: help setup setup-all verify clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset
 
 # Default target
 help:
 	@echo "Available targets:"
+	@echo "  setup-all     - Complete setup: environment, dependencies, database, and verification"
 	@echo "  setup         - Create conda environment and install dependencies"
 	@echo "  install-dev   - Install development dependencies"
+	@echo "  verify        - Verify that everything is working correctly"
 	@echo "  clean         - Remove conda environment"
 	@echo "  test          - Run all tests"
 	@echo "  test-unit     - Run unit tests only"
@@ -23,6 +25,36 @@ help:
 	@echo "  db-init       - Initialize database"
 	@echo "  db-clean      - Clean up database (remove all data)"
 	@echo "  db-reset      - Reset database (drop and recreate)"
+
+# Complete setup: environment, dependencies, database, and verification
+setup-all:
+	@echo "🚀 Starting complete Racer setup..."
+	@echo ""
+	@echo "Step 1/6: Cleaning up any existing environments..."
+	@$(MAKE) clean
+	@echo ""
+	@echo "Step 2/6: Creating development environment..."
+	@$(MAKE) install-dev
+	@echo ""
+	@echo "Step 3/6: Initializing database..."
+	@$(MAKE) db-init
+	@echo ""
+	@echo "Step 4/6: Running quick verification tests..."
+	@$(MAKE) test-quick
+	@echo ""
+	@echo "Step 5/6: Checking Docker availability..."
+	@docker --version > /dev/null 2>&1 && echo "✅ Docker is available" || echo "⚠️  Docker not found - some features may not work"
+	@echo ""
+	@echo "Step 6/6: Setup verification complete!"
+	@echo ""
+	@echo "🎉 Racer is ready to use!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Activate the environment: conda activate racer-dev"
+	@echo "  2. Start the backend: make backend"
+	@echo "  3. In another terminal, test the CLI: racer --help"
+	@echo "  4. Try running a project: racer run --project-name test --path ./test-project"
+	@echo ""
 
 # Setup conda environment and install dependencies
 setup:
@@ -110,3 +142,24 @@ db-clean:
 
 db-reset: db-clean db-init
 	@echo "Database reset complete"
+
+# Quick verification that everything is working
+verify:
+	@echo "🔍 Verifying Racer setup..."
+	@echo ""
+	@echo "Checking conda environment..."
+	@conda info --envs | grep -q "racer-dev" && echo "✅ racer-dev environment exists" || echo "❌ racer-dev environment not found"
+	@echo ""
+	@echo "Checking CLI installation..."
+	@conda run -n racer-dev racer --help > /dev/null 2>&1 && echo "✅ CLI is working" || echo "❌ CLI not working"
+	@echo ""
+	@echo "Checking database..."
+	@cd src/backend && PYTHONPATH=$(PWD) conda run -n racer-dev python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); print('✅ Database is accessible')" 2>/dev/null || echo "❌ Database not accessible"
+	@echo ""
+	@echo "Checking Docker..."
+	@docker --version > /dev/null 2>&1 && echo "✅ Docker is available" || echo "⚠️  Docker not found"
+	@echo ""
+	@echo "Running quick tests..."
+	@$(MAKE) test-quick > /dev/null 2>&1 && echo "✅ Tests are passing" || echo "❌ Tests are failing"
+	@echo ""
+	@echo "🎯 Verification complete!"

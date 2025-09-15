@@ -49,6 +49,13 @@ cd racer
 
 Use the provided Makefile for easy setup:
 
+#### Option A: Complete Setup (One Command)
+```bash
+# Complete setup: environment, dependencies, database, and verification
+make setup-all
+```
+
+#### Option B: Step-by-Step Setup
 ```bash
 # Create conda environment and install all dependencies
 make setup
@@ -61,6 +68,12 @@ make install-dev
 
 # Activate the environment
 conda activate racer-dev
+```
+
+#### Verify Your Setup
+```bash
+# Check that everything is working correctly
+make verify
 ```
 
 ### 3. Start the Backend Server
@@ -253,8 +266,10 @@ The project includes a comprehensive Makefile for development:
 make help
 
 # Setup and installation
+make setup-all          # Complete setup: environment, dependencies, database, and verification
 make setup              # Create base conda environment from base.yaml
 make install-dev        # Create development environment from dev.yaml
+make verify             # Verify that everything is working correctly
 
 # Database management
 make db-init            # Initialize database
