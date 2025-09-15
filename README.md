@@ -198,11 +198,10 @@ racer swarm-logs --project-name <name>                  # Get service logs
 racer swarm-remove --project-name <name>                # Remove swarm service
 
 # Rerun a project
-racer rerun                    # Rerun with rebuilt image (includes source changes)
-racer rerun --no-rebuild       # Rerun with existing image (faster restart)
-racer rerun --project-id <id>  # Rerun specific project by ID
-racer rerun --project-name <name>  # Rerun all instances of project by name
-racer rerun --list             # List projects before rerunning
+racer rerun --project-name <name>  # Rerun all instances of project by name (recommended)
+racer rerun --project-id <id>      # Rerun specific project by ID (alternative)
+racer rerun --no-rebuild           # Rerun with existing image (faster restart)
+racer rerun --list                 # List projects before rerunning
 ```
 
 ### Admin Commands (`racerctl`)
@@ -410,13 +409,13 @@ The `racer status` command provides comprehensive project monitoring with multip
 ### Flexible Project Identification
 
 ```bash
-# Reference by project name (extracted from container names)
+# Reference by project name (recommended - extracted from container names)
 racer status --project-name "my-app"
 
-# Reference by project ID (auto-generated UUID)
+# Reference by project ID (auto-generated UUID - use when name lookup fails)
 racer status --project-id "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
-# Reference by container ID (Docker container identifier)
+# Reference by container ID (Docker container identifier - for direct container access)
 racer status --container-id "73a0004b3b23"
 
 # List all running projects
@@ -589,20 +588,17 @@ racer rerun
 # Rerun with existing image (faster restart)
 racer rerun --no-rebuild
 
-# Rerun specific project with rebuilt image
-racer rerun --project-id <project_id>
-
-# Rerun all instances of a project by name
+# Rerun all instances of a project by name (recommended)
 racer rerun --project-name my-app
 
 # Rerun with custom configuration and rebuilt image
-racer rerun --project-id <project_id> --ports 8080:8000 --environment DEBUG=true
+racer rerun --project-name my-app --ports 8080:8000 --environment DEBUG=true
 
 # Fast restart without rebuilding (for configuration changes only)
-racer rerun --project-id <project_id> --no-rebuild
-
-# Rerun all instances of a project without rebuilding
 racer rerun --project-name my-app --no-rebuild
+
+# Rerun specific project by ID (alternative)
+racer rerun --project-id <project_id>
 
 # List projects before rerunning
 racer rerun --list
