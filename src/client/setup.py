@@ -4,8 +4,7 @@ setup(
     name="racerctl",
     version="0.1.0",
     description="Rapid deployment system for conda-projects - CLI tools",
-    packages=find_packages(where="src/client"),
-    package_dir={"": "src/client"},
+    packages=find_packages(),
     entry_points={
         "console_scripts": [
             "racer=racer_cli:cli",
