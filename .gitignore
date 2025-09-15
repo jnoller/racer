@@ -68,6 +68,12 @@ src/backend/racer.db-journal
 *.db
 *.db-journal
 
+# Generated Docker files
+test-project/Dockerfile
+test-project/docker-compose.yml
+**/Dockerfile.generated
+**/docker-compose.yml.generated
+
 # Flask stuff:
 instance/
 .webassets-cache
