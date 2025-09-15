@@ -1,5 +1,5 @@
 services:
-  test-scale_1:
+  scaled-app_1:
     build: &id001
       context: /Users/jesse/Code/pws/racer/test-project
       dockerfile: Dockerfile
@@ -18,14 +18,14 @@ services:
       timeout: 10s
       retries: '3'
       start_period: 40s
-    container_name: test-scale_1
+    container_name: scaled-app_1
     ports:
-    - 8001:8000
-  test-scale_2:
+    - 9001:8000
+  scaled-app_2:
     build: *id001
     environment: *id002
     restart: unless-stopped
     healthcheck: *id003
-    container_name: test-scale_2
+    container_name: scaled-app_2
     ports:
-    - 8002:8000
+    - 9002:8000

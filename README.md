@@ -14,6 +14,7 @@
 - 🚀 **One-command deployment** of conda-projects to Docker containers
 - 🐳 **Docker integration** with automatic image building and container management
 - 📦 **Conda-project support** with validation and environment management
+- 🆔 **Auto-generated project IDs** with user-friendly project names for easy management
 - 🔧 **Dual CLI interface** for users and administrators
 - 🌐 **RESTful API** with health, validation, and container management endpoints
 - 📈 **Horizontal scaling** with Docker Compose for multiple instances
@@ -122,7 +123,7 @@ racer/
 
 ```bash
 # Run a conda-project in Docker
-racer run --path /path/to/project --ports 8080:8000
+racer run --project-name "my-app" --path /path/to/project --ports 8080:8000
 
 # Validate a conda-project
 racer validate --path /path/to/project
@@ -265,6 +266,45 @@ make db-reset
 
 The database file (`src/backend/racer.db`) is automatically created and managed. It's included in `.gitignore` to avoid committing database state to version control.
 
+## Project Management
+
+Racer uses a dual-identifier system for managing projects:
+
+### Project Names vs Project IDs
+
+- **Project Name** (`--project-name`): User-provided, memorable name for the project (required for `racer run`)
+- **Project ID**: Auto-generated unique identifier (UUID) created by the backend
+
+### How It Works
+
+1. **Running Projects**: Users provide a `--project-name` when running projects
+2. **Auto-Generation**: Backend automatically generates a unique `project_id` using UUID
+3. **Flexible Reference**: Users can reference projects by either `--project-name` OR `--project-id` for all operations
+
+### Example Workflow
+
+```bash
+# Run a project with a name
+racer run --project-name "my-app" --path ./my-project
+
+# Backend generates: project_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+# Reference by name
+racer status --project-name "my-app"
+racer rerun --project-name "my-app"
+
+# Reference by ID (from list-projects output)
+racer status --project-id "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+racer rerun --project-id "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+```
+
+### Benefits
+
+- **User-Friendly**: Use memorable project names for daily operations
+- **Unique Identification**: Auto-generated IDs ensure no conflicts
+- **Flexible Management**: Choose the identifier that works best for your workflow
+- **Persistent Tracking**: Project state survives backend restarts
+
 ## Usage Examples
 
 ### 1. Deploy a Local Project
@@ -274,13 +314,13 @@ The database file (`src/backend/racer.db`) is automatically created and managed.
 make backend
 
 # In another terminal, run your project
-racer run --path /path/to/your/conda-project --ports 8080:8000
+racer run --project-name "my-app" --path /path/to/your/conda-project --ports 8080:8000
 ```
 
 ### 2. Deploy from Git Repository
 
 ```bash
-racer run --git https://github.com/user/repo.git --ports 8080:8000
+racer run --project-name "my-app" --git https://github.com/user/repo.git --ports 8080:8000
 ```
 
 ### 3. Validate a Project

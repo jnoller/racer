@@ -1086,8 +1086,9 @@ async def rerun_project(request: ProjectRerunRequest):
                 # Build the new image
                 build_response = container_manager.build_image(
                     project_path=project_path,
+                    project_name=project_name,
                     dockerfile_path=dockerfile_path,
-                    image_name=f"{project_name}:latest",
+                    custom_commands=request.custom_commands,
                 )
 
                 if not build_response["success"]:
