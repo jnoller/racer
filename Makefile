@@ -91,22 +91,22 @@ format:
 # Run backend server
 backend:
 	@echo "Starting backend server..."
-	cd src/backend && conda run -n racer uvicorn main:app --reload --host 0.0.0.0 --port 8000
+	cd src/backend && conda run -n racer-dev uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Install client in development mode
 client:
 	@echo "Installing client in development mode..."
-	conda run -n racer pip install -e src/client/
+	conda run -n racer-dev pip install -e src/client/
 	@echo "Client installed. Test with: racerctl --help"
 
 # Database management
 db-init:
 	@echo "Initializing database..."
-	cd src/backend && PYTHONPATH=$(PWD) conda run -n racer python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); db.init_database(); print('Database initialized successfully')"
+	cd src/backend && PYTHONPATH=$(PWD) conda run -n racer-dev python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); db.init_database(); print('Database initialized successfully')"
 
 db-clean:
 	@echo "Cleaning up database..."
-	cd src/backend && PYTHONPATH=$(PWD) conda run -n racer python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); db.cleanup_database(); print('Database cleaned successfully')"
+	cd src/backend && PYTHONPATH=$(PWD) conda run -n racer-dev python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); db.cleanup_database(); print('Database cleaned successfully')"
 
 db-reset: db-clean db-init
 	@echo "Database reset complete"
