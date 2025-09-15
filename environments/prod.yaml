@@ -1,0 +1,30 @@
+name: racer-prod
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - conda-project
+  - pip
+  - pip:
+    # Core FastAPI dependencies
+    - fastapi==0.104.1
+    - uvicorn[standard]==0.24.0
+    - pydantic==2.5.0
+    
+    # CLI client dependencies
+    - click==8.2.1
+    - requests==2.32.5
+    
+    # Docker and project management
+    - docker==7.1.0
+    - gitpython==3.1.45
+    - pyyaml==6.0.2
+    
+    # Database dependencies
+    - sqlalchemy==2.0.23
+    - alembic==1.13.1
+    
+    # Additional utilities
+    - python-multipart==0.0.6
+    - python-dotenv==1.0.0

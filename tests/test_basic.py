@@ -125,7 +125,7 @@ def test_project_validation_missing_files():
 def test_cli_imports():
     """Test that CLI modules can be imported."""
     from src.client.racer_cli import cli as racer_cli
-    from src.client.racerctl import cli as racerctl_cli
+    from src.client.cli import cli as racerctl_cli
     
     assert racer_cli is not None
     assert racerctl_cli is not None

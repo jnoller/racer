@@ -26,66 +26,67 @@ help:
 
 # Setup conda environment and install dependencies
 setup:
-	@echo "Creating conda environment 'racer'..."
-	conda create -n racer python=3.11 -y
-	@echo "Activating environment and installing conda-project..."
-	conda run -n racer conda install -c conda-forge conda-project -y
-	@echo "Installing Python dependencies..."
-	conda run -n racer pip install -r requirements.txt
+	@echo "Creating conda environment from base.yaml..."
+	conda env create -f environments/base.yaml
+	@echo "Installing client in development mode..."
+	conda run -n racer pip install -e src/client/
 	@echo "Setup complete! Activate the environment with: conda activate racer"
 
 # Install development dependencies
-install-dev: setup
-	@echo "Installing development dependencies..."
-	conda run -n racer pip install -r requirements-dev.txt
+install-dev:
+	@echo "Creating development environment from dev.yaml..."
+	conda env create -f environments/dev.yaml
 	@echo "Installing client in development mode..."
-	conda run -n racer pip install -e src/client/
+	conda run -n racer-dev pip install -e src/client/
+	@echo "Development setup complete! Activate with: conda activate racer-dev"
 
-# Clean up conda environment
+# Clean up conda environments
 clean:
-	@echo "Removing conda environment 'racer'..."
-	conda env remove -n racer -y
-	@echo "Environment removed."
+	@echo "Removing conda environments..."
+	conda env remove -n racer -y 2>/dev/null || true
+	conda env remove -n racer-dev -y 2>/dev/null || true
+	conda env remove -n racer-prod -y 2>/dev/null || true
+	@echo "Environments removed."
 
 # Run tests
 test:
 	@echo "Running all tests..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/test_basic.py -v
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py -v
 
 test-unit:
 	@echo "Running unit tests..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/unit/ -v
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/unit/ -v
 
 test-integration:
 	@echo "Running integration tests..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/test_integration_simple.py -v
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_integration_simple.py -v
 
 test-docker:
 	@echo "Running Docker tests..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/ -v -m docker
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/ -v -m docker
 
 test-api:
 	@echo "Running API tests..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/ -v -m api
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/ -v -m api
 
 test-coverage:
 	@echo "Running tests with coverage..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/test_basic.py --cov=src --cov-report=html --cov-report=term
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py --cov=src --cov-report=html --cov-report=term
 
 test-quick:
 	@echo "Running quick tests (no Docker/API)..."
-	PYTHONPATH=$(PWD) conda run -n racer python -m pytest tests/test_basic.py -v
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py -v
 
 # Run linting
 lint:
 	@echo "Running linting..."
-	conda run -n racer flake8 src/
-	conda run -n racer black --check src/
+	conda run -n racer-dev flake8 src/
+	conda run -n racer-dev black --check src/
 
 # Format code
 format:
 	@echo "Formatting code..."
-	conda run -n racer black src/
+	conda run -n racer-dev black src/
 
 # Run backend server
 backend:

@@ -60,7 +60,7 @@ make db-init
 make install-dev
 
 # Activate the environment
-conda activate racer
+conda activate racer-dev
 ```
 
 ### 3. Start the Backend Server
@@ -91,8 +91,10 @@ racer/
 ├── README.md
 ├── Makefile                    # Development automation
 ├── pytest.ini                 # Test configuration
-├── requirements.txt            # Main Python dependencies
-├── requirements-dev.txt        # Development dependencies
+├── environments/               # Conda environment definitions
+│   ├── base.yaml              # Base environment (production)
+│   ├── dev.yaml               # Development environment
+│   └── prod.yaml              # Production environment
 ├── src/
 │   ├── backend/               # FastAPI orchestration server
 │   │   ├── main.py           # FastAPI application entry point
@@ -219,8 +221,8 @@ The project includes a comprehensive Makefile for development:
 make help
 
 # Setup and installation
-make setup              # Create conda environment and install dependencies
-make install-dev        # Install development dependencies and client
+make setup              # Create base conda environment from base.yaml
+make install-dev        # Create development environment from dev.yaml
 
 # Database management
 make db-init            # Initialize database
@@ -243,7 +245,7 @@ make lint              # Run linting
 make format            # Format code
 
 # Cleanup
-make clean             # Remove conda environment
+make clean             # Remove all conda environments
 ```
 
 ## Database Management
