@@ -5,11 +5,4 @@ dependencies:
   - python=3.11
   - fastapi
   - uvicorn
-  - requests
-variables:
-platforms:
-  - osx-64
-  - win-64
-  - osx-arm64
-  - linux-64
-  - linux-aarch64
+variables: {}

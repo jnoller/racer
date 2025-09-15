@@ -21,7 +21,6 @@ from project_validator import (
 )
 from dockerfile_template import generate_dockerfile, write_dockerfile
 from docker_manager import ContainerManager
-from compose_template import generate_compose_file, write_compose_file
 from swarm_manager import SwarmManager
 
 try:
@@ -679,11 +678,11 @@ async def cleanup_containers():
 async def list_projects():
     """
     List all running projects with user-friendly information.
-    Includes tracked containers, Docker Compose managed containers, and Docker Swarm services.
+    Includes tracked containers and Docker Swarm services.
     """
     try:
         projects = []
-        
+
         # 1. Get tracked containers from ContainerManager
         containers_response = container_manager.list_containers()
         if containers_response["success"]:
@@ -744,83 +743,7 @@ async def list_projects():
                 )
                 projects.append(project_info)
 
-        # 2. Get Docker Compose managed containers
-        try:
-            import subprocess
-            import json
-            
-            # Get all running Docker containers
-            result = subprocess.run(
-                ["docker", "ps", "--format", "json"],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.returncode == 0:
-                # Parse each line as a separate JSON object
-                for line in result.stdout.strip().split('\n'):
-                    if line.strip():
-                        try:
-                            container_data = json.loads(line)
-                            container_name = container_data.get("Names", "")
-                            container_id = container_data.get("ID", "")
-                            
-                            # Check if this is a Docker Compose managed container
-                            # (not already tracked by ContainerManager)
-                            if container_name and container_id:
-                                # Check if this container is already in our projects list
-                                already_tracked = any(
-                                    p.container_id == container_id or p.container_name == container_name 
-                                    for p in projects
-                                )
-                                
-                                if not already_tracked:
-                                    # Extract project name from container name
-                                    project_name = container_name
-                                    
-                                    # Handle Docker Compose naming patterns
-                                    if "test-project-" in container_name:
-                                        # Extract project name from patterns like "test-project-debug-test-1"
-                                        parts = container_name.split("-")
-                                        if len(parts) >= 4:  # test-project-debug-test-1
-                                            project_name = "-".join(parts[2:-1])  # debug-test
-                                    elif "_" in container_name:
-                                        # Handle patterns like "final-scale-test_1"
-                                        project_name = container_name.split("_")[0]
-                                    
-                                    # Get ports from container data
-                                    ports = {}
-                                    ports_str = container_data.get("Ports", "")
-                                    if ports_str:
-                                        # Parse port mappings like "0.0.0.0:9001->8000/tcp"
-                                        for port_mapping in ports_str.split(", "):
-                                            if "->" in port_mapping:
-                                                host_port, container_port = port_mapping.split("->")
-                                                if ":" in host_port:
-                                                    host_port = host_port.split(":")[1]
-                                                container_port = container_port.split("/")[0]
-                                                ports[f"{host_port}/tcp"] = int(container_port)
-                                    
-                                    project_info = ProjectInfo(
-                                        project_id=container_id[:12],
-                                        project_name=project_name,
-                                        container_id=container_id,
-                                        container_name=container_name,
-                                        status="running",
-                                        ports=ports,
-                                        started_at="",  # Not available from docker ps
-                                        image=container_data.get("Image", "unknown"),
-                                    )
-                                    projects.append(project_info)
-                                    
-                        except json.JSONDecodeError:
-                            continue
-                            
-        except Exception as e:
-            # If Docker Compose container detection fails, continue with tracked containers only
-            print(f"Warning: Could not detect Docker Compose containers: {e}")
-
-        # 3. Get Docker Swarm services
+        # 2. Get Docker Swarm services
         if swarm_manager:
             try:
                 swarm_services_response = swarm_manager.list_services()
@@ -829,13 +752,14 @@ async def list_projects():
                     for service in swarm_services:
                         service_name = service.get("service_name", "")
                         service_id = service.get("service_id", "")
-                        
+
                         # Check if this service is already in our projects list
                         already_tracked = any(
-                            p.container_id == service_id or p.project_name == service_name 
+                            p.container_id == service_id
+                            or p.project_name == service_name
                             for p in projects
                         )
-                        
+
                         if not already_tracked:
                             # Create project info for swarm service
                             project_info = ProjectInfo(
@@ -849,7 +773,7 @@ async def list_projects():
                                 image=service.get("image", "unknown"),
                             )
                             projects.append(project_info)
-                            
+
             except Exception as e:
                 print(f"Warning: Could not detect Docker Swarm services: {e}")
 
@@ -1382,7 +1306,7 @@ async def scale_project(request: ProjectScaleRequest):
             replicas=instances,
             ports=ports,
             environment=environment,
-            command=command
+            command=command,
         )
 
         if not service_result["success"]:
@@ -1397,7 +1321,7 @@ async def scale_project(request: ProjectScaleRequest):
 
         # Get service status to verify it's running
         service_status = swarm_manager.get_service_status(project_name)
-        
+
         created_containers = []
         if service_status["success"]:
             # Create container info for each replica
@@ -1465,7 +1389,7 @@ async def scale_up_project(request: ProjectScaleRequest):
 
         # Get updated service status
         service_status = swarm_manager.get_service_status(project_name)
-        
+
         created_containers = []
         if service_status["success"]:
             # Create container info for each replica
@@ -1529,7 +1453,7 @@ async def scale_down_project(request: ProjectScaleRequest):
 
         # Get updated service status
         service_status = swarm_manager.get_service_status(project_name)
-        
+
         created_containers = []
         if service_status["success"]:
             # Create container info for each replica
@@ -1569,7 +1493,7 @@ async def list_swarm_services():
             return {
                 "success": False,
                 "services": [],
-                "message": "Docker Swarm manager not available"
+                "message": "Docker Swarm manager not available",
             }
 
         result = swarm_manager.list_services()
@@ -1588,10 +1512,7 @@ async def get_swarm_service_status(service_name: str):
     """
     try:
         if not swarm_manager:
-            return {
-                "success": False,
-                "message": "Docker Swarm manager not available"
-            }
+            return {"success": False, "message": "Docker Swarm manager not available"}
 
         result = swarm_manager.get_service_status(service_name)
         return result
@@ -1609,10 +1530,7 @@ async def get_swarm_service_logs(service_name: str, tail: int = 100):
     """
     try:
         if not swarm_manager:
-            return {
-                "success": False,
-                "message": "Docker Swarm manager not available"
-            }
+            return {"success": False, "message": "Docker Swarm manager not available"}
 
         result = swarm_manager.get_service_logs(service_name, tail)
         return result
@@ -1630,10 +1548,7 @@ async def remove_swarm_service(service_name: str):
     """
     try:
         if not swarm_manager:
-            return {
-                "success": False,
-                "message": "Docker Swarm manager not available"
-            }
+            return {"success": False, "message": "Docker Swarm manager not available"}
 
         result = swarm_manager.remove_service(service_name)
         return result

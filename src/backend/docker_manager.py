@@ -319,12 +319,16 @@ class ContainerManager:
                     # For Docker Compose containers, we need to extract ports from container info
                     ports = {}
                     if container.attrs.get("NetworkSettings", {}).get("Ports"):
-                        for container_port, host_bindings in container.attrs["NetworkSettings"]["Ports"].items():
+                        for container_port, host_bindings in container.attrs[
+                            "NetworkSettings"
+                        ]["Ports"].items():
                             if host_bindings:
                                 for binding in host_bindings:
                                     host_port = binding.get("HostPort", "")
                                     if host_port:
-                                        ports[f"{host_port}/tcp"] = int(container_port.split("/")[0])
+                                        ports[f"{host_port}/tcp"] = int(
+                                            container_port.split("/")[0]
+                                        )
                 except Exception as e:
                     return {
                         "success": False,

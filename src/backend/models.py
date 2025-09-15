@@ -60,21 +60,19 @@ class Container(Base):
 
 
 class ScaleGroup(Base):
-    """Model for tracking scaled project groups (Docker Compose or Swarm deployments)."""
+    """Model for tracking scaled project groups (Docker Swarm deployments)."""
 
     __tablename__ = "scale_groups"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)  # Service/project name
-    service_id = Column(String(64), nullable=True, unique=True, index=True)  # Swarm service ID
+    service_id = Column(
+        String(64), nullable=True, unique=True, index=True
+    )  # Swarm service ID
     replicas = Column(Integer, nullable=False, default=1)
     image = Column(String(255), nullable=False)
     ports = Column(JSON, nullable=True)  # Store port mappings as JSON
     environment = Column(JSON, nullable=True)  # Store environment variables as JSON
-    deployment_type = Column(String(50), nullable=False, default="compose")  # "compose" or "swarm"
-    compose_file_path = Column(String(500), nullable=True)
-    nginx_config_path = Column(String(500), nullable=True)
-    use_load_balancer = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

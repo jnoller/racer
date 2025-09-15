@@ -1173,7 +1173,9 @@ def scale_down(ctx, project_name: str, instances: int):
             click.echo(f"Target instances: {instances}")
 
         # Make API call
-        response = client._make_request("POST", "/project/scale-down", json=request_data)
+        response = client._make_request(
+            "POST", "/project/scale-down", json=request_data
+        )
 
         if response.get("success"):
             click.echo(click.style("✓ Project scaled down successfully", fg="green"))
@@ -1225,21 +1227,27 @@ def swarm_status(ctx, project_name: str):
 
         if project_name:
             # Get status for specific service
-            response = client._make_request("GET", f"/swarm/service/{project_name}/status")
-            
+            response = client._make_request(
+                "GET", f"/swarm/service/{project_name}/status"
+            )
+
             if response.get("success"):
-                click.echo(click.style(f"✓ Service status for {project_name}", fg="green"))
+                click.echo(
+                    click.style(f"✓ Service status for {project_name}", fg="green")
+                )
                 click.echo(f"Service ID: {response.get('service_id', 'unknown')}")
-                click.echo(f"Replicas: {response.get('running_replicas', 0)}/{response.get('replicas', 0)}")
+                click.echo(
+                    f"Replicas: {response.get('running_replicas', 0)}/{response.get('replicas', 0)}"
+                )
                 click.echo(f"Status: {response.get('status', 'unknown')}")
                 click.echo(f"Image: {response.get('image', 'unknown')}")
-                
+
                 ports = response.get("ports", {})
                 if ports:
                     click.echo("Ports:")
                     for port, mapping in ports.items():
                         click.echo(f"  {port} -> {mapping}")
-                
+
                 message = response.get("message", "")
                 if message:
                     click.echo(f"Message: {message}")
@@ -1250,7 +1258,7 @@ def swarm_status(ctx, project_name: str):
         else:
             # List all services
             response = client._make_request("GET", "/swarm/services")
-            
+
             if response.get("success"):
                 services = response.get("services", [])
                 if services:
@@ -1259,10 +1267,12 @@ def swarm_status(ctx, project_name: str):
                     for service in services:
                         click.echo(f"Service: {service.get('service_name', 'unknown')}")
                         click.echo(f"  ID: {service.get('service_id', 'unknown')[:12]}")
-                        click.echo(f"  Replicas: {service.get('running_replicas', 0)}/{service.get('replicas', 0)}")
+                        click.echo(
+                            f"  Replicas: {service.get('running_replicas', 0)}/{service.get('replicas', 0)}"
+                        )
                         click.echo(f"  Status: {service.get('status', 'unknown')}")
                         click.echo(f"  Image: {service.get('image', 'unknown')}")
-                        
+
                         ports = service.get("ports", {})
                         if ports:
                             click.echo("  Ports:")
@@ -1271,7 +1281,7 @@ def swarm_status(ctx, project_name: str):
                         click.echo()
                 else:
                     click.echo("No Docker Swarm services found.")
-                
+
                 message = response.get("message", "")
                 if message:
                     click.echo(f"Message: {message}")
@@ -1289,7 +1299,9 @@ def swarm_status(ctx, project_name: str):
 
 
 @cli.command()
-@click.option("--project-name", "-n", required=True, help="Name of the project to get logs from")
+@click.option(
+    "--project-name", "-n", required=True, help="Name of the project to get logs from"
+)
 @click.option("--tail", "-t", default=100, help="Number of log lines to retrieve")
 @click.pass_context
 def swarm_logs(ctx, project_name: str, tail: int):
@@ -1308,7 +1320,9 @@ def swarm_logs(ctx, project_name: str, tail: int):
             click.echo(f"Tail: {tail} lines")
 
         # Make API call
-        response = client._make_request("GET", f"/swarm/service/{project_name}/logs?tail={tail}")
+        response = client._make_request(
+            "GET", f"/swarm/service/{project_name}/logs?tail={tail}"
+        )
 
         if response.get("success"):
             logs = response.get("logs", "")
@@ -1332,7 +1346,9 @@ def swarm_logs(ctx, project_name: str, tail: int):
 
 
 @cli.command()
-@click.option("--project-name", "-n", required=True, help="Name of the project to remove")
+@click.option(
+    "--project-name", "-n", required=True, help="Name of the project to remove"
+)
 @click.option("--force", "-f", is_flag=True, help="Force removal without confirmation")
 @click.pass_context
 def swarm_remove(ctx, project_name: str, force: bool):
@@ -1345,7 +1361,9 @@ def swarm_remove(ctx, project_name: str, force: bool):
 
     try:
         if not force:
-            if not click.confirm(f"Are you sure you want to remove service '{project_name}'?"):
+            if not click.confirm(
+                f"Are you sure you want to remove service '{project_name}'?"
+            ):
                 click.echo("Operation cancelled.")
                 return
 
@@ -1358,7 +1376,11 @@ def swarm_remove(ctx, project_name: str, force: bool):
         response = client._make_request("DELETE", f"/swarm/service/{project_name}")
 
         if response.get("success"):
-            click.echo(click.style(f"✓ Service '{project_name}' removed successfully", fg="green"))
+            click.echo(
+                click.style(
+                    f"✓ Service '{project_name}' removed successfully", fg="green"
+                )
+            )
             message = response.get("message", "")
             if message:
                 click.echo(f"Message: {message}")

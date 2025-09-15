@@ -267,10 +267,6 @@ class DatabaseManager:
         image: str = None,
         ports: dict = None,
         environment: dict = None,
-        deployment_type: str = "compose",
-        compose_file_path: str = None,
-        nginx_config_path: str = None,
-        use_load_balancer: bool = False,
     ) -> Optional[ScaleGroup]:
         """Create a new scale group."""
         session = self.get_session()
@@ -282,10 +278,6 @@ class DatabaseManager:
                 image=image or "",
                 ports=ports or {},
                 environment=environment or {},
-                deployment_type=deployment_type,
-                compose_file_path=compose_file_path,
-                nginx_config_path=nginx_config_path,
-                use_load_balancer=use_load_balancer,
             )
             session.add(scale_group)
             session.commit()
@@ -302,11 +294,7 @@ class DatabaseManager:
         """Get a scale group by name."""
         session = self.get_session()
         try:
-            return (
-                session.query(ScaleGroup)
-                .filter(ScaleGroup.name == name)
-                .first()
-            )
+            return session.query(ScaleGroup).filter(ScaleGroup.name == name).first()
         except SQLAlchemyError as e:
             print(f"Failed to get scale group: {e}")
             return None
@@ -336,7 +324,11 @@ class DatabaseManager:
         """Update a scale group."""
         session = self.get_session()
         try:
-            scale_group = session.query(ScaleGroup).filter(ScaleGroup.id == scale_group_id).first()
+            scale_group = (
+                session.query(ScaleGroup)
+                .filter(ScaleGroup.id == scale_group_id)
+                .first()
+            )
             if scale_group:
                 for key, value in kwargs.items():
                     if hasattr(scale_group, key):
@@ -355,7 +347,11 @@ class DatabaseManager:
         """Delete a scale group by ID."""
         session = self.get_session()
         try:
-            scale_group = session.query(ScaleGroup).filter(ScaleGroup.id == scale_group_id).first()
+            scale_group = (
+                session.query(ScaleGroup)
+                .filter(ScaleGroup.id == scale_group_id)
+                .first()
+            )
             if scale_group:
                 session.delete(scale_group)
                 session.commit()

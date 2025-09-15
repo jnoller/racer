@@ -99,7 +99,6 @@ racer/
 │   │   ├── docker_manager.py # Docker container management
 │   │   ├── project_validator.py # Conda-project validation
 │   │   ├── dockerfile_template.py # Dockerfile generation
-│   │   ├── compose_template.py # Docker Compose template generation
 │   │   ├── models.py         # SQLAlchemy database models
 │   │   ├── database.py       # Database manager
 │   │   └── racer.db          # SQLite database (auto-created)
@@ -253,7 +252,7 @@ Racer uses SQLite for persistent state tracking across backend restarts. The dat
 
 - **Projects** - Project metadata, paths, and configurations
 - **Containers** - Container IDs, names, status, ports, and environment variables
-- **Scale Groups** - Docker Compose deployments and scaling information
+- **Scale Groups** - Docker Swarm deployments and scaling information
 
 ### Database Commands
 
@@ -486,13 +485,13 @@ racer scale --project-name my-app --instances 2 --path ./my-project \
 ```
 
 **Scale Behavior:**
-- **Docker Compose orchestration**: Uses Docker Compose for reliable multi-container management
+- **Docker Swarm orchestration**: Uses Docker Swarm for reliable multi-container management
 - **Multiple instances**: Creates multiple containers from the same project
 - **Port management**: Auto-increments host ports (8001, 8002, 8003, etc.)
 - **Project naming**: Uses project name for container naming with unique suffixes
 - **Load balancing ready**: Each instance gets unique ports for load balancer setup
 - **Service management**: Automatic health checks and restart policies
-- **Generated files**: Creates `docker-compose.yml` and optional `nginx.conf` for load balancing
+- **Dynamic scaling**: Scale up/down without recreating services
 
 ### 7. Rerun Projects
 
@@ -607,7 +606,7 @@ DOCKER_HOST=unix:///var/run/docker.sock
 - **Docker** - Docker SDK for Python
 - **GitPython** - Git repository management
 - **PyYAML** - YAML parsing
-- **Docker Compose** - Multi-container orchestration
+- **Docker Swarm** - Multi-container orchestration
 - **SQLAlchemy** - Database ORM
 - **Alembic** - Database migrations
 
@@ -704,15 +703,15 @@ mypy src/
 - Dual CLI interface (racer/racerctl)
 - Docker integration with container management
 - Conda-project validation and deployment
-- Horizontal scaling with Docker Compose
-- Load balancing with Nginx configuration
+- Horizontal scaling with Docker Swarm
+- Built-in load balancing and service discovery
 - **SQLite database integration** for persistent state tracking
 - **Database management commands** (db-init, db-clean, db-reset)
 - **State persistence** across backend restarts
 - **Enhanced status command** with flexible project identification
 - **Smart project name extraction** from container naming patterns
 - **Container ID support** for direct container status checks
-- **Docker Compose container status** integration
+- **Docker Swarm container status** integration
 - **Docker Swarm integration** for production-ready scaling and orchestration
 - **Dynamic scaling commands** (scale-up, scale-down) with Docker Swarm
 - **Built-in load balancing** and service discovery
