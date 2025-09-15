@@ -942,8 +942,7 @@ async def rerun_project(request: ProjectRerunRequest):
         
         # Prepare run request with same configuration as original
         run_request_data = {
-            'project_path': project_path,
-            'custom_commands': request.custom_commands,
+            'project_name': project_name,
             'ports': request.ports or target_project.ports,
             'environment': request.environment,
             'command': request.command
@@ -959,7 +958,7 @@ async def rerun_project(request: ProjectRerunRequest):
                 )
                 
                 # Write the Dockerfile
-                dockerfile_path = write_dockerfile(project_path, dockerfile_response)
+                dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
                 
                 # Build the new image
                 build_response = container_manager.build_image(

@@ -391,7 +391,10 @@ def status(ctx, project_name: str, project_id: str, container_id: str, list_proj
                 image = status_response.get('image', 'unknown')
                 
                 click.echo(f"Container: {container_name}")
-                click.echo(f"ID: {container_id[:12]}")
+                if container_id:
+                    click.echo(f"ID: {container_id[:12]}")
+                else:
+                    click.echo(f"ID: {status_response.get('container_id', 'unknown')[:12]}")
                 click.echo(f"Status: {container_status}")
                 click.echo(f"Image: {image}")
                 click.echo(f"Started: {started_at}")
@@ -744,7 +747,7 @@ def scale(ctx, project_name: str, instances: int, project_path: str, git_url: st
     Scale a project to run multiple instances.
     """
     api_url = ctx.obj['api_url']
-    timeout = ctx.obj['timeout']
+    timeout = max(ctx.obj['timeout'], 120)  # Scale operations need more time
     verbose = ctx.obj['verbose']
     
     if not project_path and not git_url:
