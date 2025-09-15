@@ -6,6 +6,7 @@ import pytest
 import requests
 import time
 from unittest.mock import patch
+from tests.test_db_utils import TestDatabaseManager
 
 
 @pytest.mark.integration

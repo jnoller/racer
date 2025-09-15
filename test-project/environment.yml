@@ -7,7 +7,6 @@ dependencies:
   - uvicorn
   - requests
 variables:
-prefix:
 platforms:
   - osx-64
   - win-64

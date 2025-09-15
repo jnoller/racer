@@ -18,6 +18,8 @@
 - 🌐 **RESTful API** with health, validation, and container management endpoints
 - 📈 **Horizontal scaling** with Docker Compose for multiple instances
 - 🔄 **Load balancing ready** with Nginx configuration generation
+- 💾 **SQLite persistence** for project and container state tracking
+- 🔄 **State persistence** across backend restarts
 - 🧪 **Comprehensive testing** with unit and integration tests
 - 📊 **Coverage reporting** and automated testing
 - ⚡ **Fast development** with hot-reload and development tools
@@ -46,6 +48,9 @@ Use the provided Makefile for easy setup:
 ```bash
 # Create conda environment and install all dependencies
 make setup
+
+# Initialize the database
+make db-init
 
 # Install development dependencies and client
 make install-dev
@@ -90,7 +95,10 @@ racer/
 │   │   ├── docker_manager.py # Docker container management
 │   │   ├── project_validator.py # Conda-project validation
 │   │   ├── dockerfile_template.py # Dockerfile generation
-│   │   └── compose_template.py # Docker Compose template generation
+│   │   ├── compose_template.py # Docker Compose template generation
+│   │   ├── models.py         # SQLAlchemy database models
+│   │   ├── database.py       # Database manager
+│   │   └── racer.db          # SQLite database (auto-created)
 │   └── client/               # Command line clients
 │       ├── __init__.py
 │       ├── api.py            # API client library
@@ -202,6 +210,11 @@ make help
 make setup              # Create conda environment and install dependencies
 make install-dev        # Install development dependencies and client
 
+# Database management
+make db-init            # Initialize database
+make db-clean           # Clean up database (remove all data)
+make db-reset           # Reset database (drop and recreate)
+
 # Development
 make backend           # Run backend server
 make client            # Install client in development mode
@@ -220,6 +233,37 @@ make format            # Format code
 # Cleanup
 make clean             # Remove conda environment
 ```
+
+## Database Management
+
+Racer uses SQLite for persistent state tracking across backend restarts. The database automatically tracks:
+
+- **Projects** - Project metadata, paths, and configurations
+- **Containers** - Container IDs, names, status, ports, and environment variables
+- **Scale Groups** - Docker Compose deployments and scaling information
+
+### Database Commands
+
+```bash
+# Initialize the database (run after setup)
+make db-init
+
+# Clean up database (remove all data)
+make db-clean
+
+# Reset database (drop and recreate)
+make db-reset
+```
+
+### Database Features
+
+- **Automatic initialization** - Database is created on first backend startup
+- **State persistence** - Container and project state survives backend restarts
+- **Foreign key relationships** - Proper data integrity between projects and containers
+- **JSON storage** - Port mappings and environment variables stored as JSON
+- **Automatic cleanup** - Stopped containers can be cleaned up automatically
+
+The database file (`src/backend/racer.db`) is automatically created and managed. It's included in `.gitignore` to avoid committing database state to version control.
 
 ## Usage Examples
 
@@ -412,6 +456,8 @@ DOCKER_HOST=unix:///var/run/docker.sock
 - **GitPython** - Git repository management
 - **PyYAML** - YAML parsing
 - **Docker Compose** - Multi-container orchestration
+- **SQLAlchemy** - Database ORM
+- **Alembic** - Database migrations
 
 ### Development Dependencies
 - **pytest** - Testing framework
@@ -508,5 +554,8 @@ mypy src/
 - Conda-project validation and deployment
 - Horizontal scaling with Docker Compose
 - Load balancing with Nginx configuration
+- **SQLite database integration** for persistent state tracking
+- **Database management commands** (db-init, db-clean, db-reset)
+- **State persistence** across backend restarts
 - Comprehensive testing infrastructure
 - Development automation with Makefile

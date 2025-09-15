@@ -17,10 +17,19 @@ from datetime import datetime
 from pathlib import Path
 
 # Import our custom modules
-from project_validator import validate_conda_project, validate_git_repository, cleanup_temp_directory
+from project_validator import (
+    validate_conda_project,
+    validate_git_repository,
+    cleanup_temp_directory,
+)
 from dockerfile_template import generate_dockerfile, write_dockerfile
 from docker_manager import ContainerManager
 from compose_template import generate_compose_file, write_compose_file
+
+try:
+    from .database import DatabaseManager
+except ImportError:
+    from database import DatabaseManager
 
 # Create FastAPI application
 app = FastAPI(
@@ -28,8 +37,9 @@ app = FastAPI(
     description="Rapid deployment system for conda-projects",
     version="0.1.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
+
 
 # Response models
 class HealthResponse(BaseModel):
@@ -38,14 +48,17 @@ class HealthResponse(BaseModel):
     version: str
     service: str
 
+
 class LivenessResponse(BaseModel):
     alive: bool
     timestamp: str
     uptime: str
 
+
 class ProjectValidationRequest(BaseModel):
     project_path: Optional[str] = None
     git_url: Optional[str] = None
+
 
 class ProjectValidationResponse(BaseModel):
     valid: bool
@@ -59,10 +72,12 @@ class ProjectValidationResponse(BaseModel):
     project_path: str
     git_url: Optional[str] = None
 
+
 class DockerfileGenerationRequest(BaseModel):
     project_path: Optional[str] = None
     git_url: Optional[str] = None
     custom_commands: Optional[List[str]] = None
+
 
 class DockerfileGenerationResponse(BaseModel):
     success: bool
@@ -70,6 +85,7 @@ class DockerfileGenerationResponse(BaseModel):
     dockerfile_content: str
     project_name: str
     message: str
+
 
 class ContainerRunRequest(BaseModel):
     project_path: Optional[str] = None
@@ -79,6 +95,7 @@ class ContainerRunRequest(BaseModel):
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
 
+
 class ContainerRunResponse(BaseModel):
     success: bool
     container_id: Optional[str] = None
@@ -86,6 +103,7 @@ class ContainerRunResponse(BaseModel):
     ports: Optional[Dict[str, int]] = None
     message: str
     status: Optional[str] = None
+
 
 class ContainerStatusResponse(BaseModel):
     success: bool
@@ -97,16 +115,20 @@ class ContainerStatusResponse(BaseModel):
     stopped_at: Optional[str] = None
     image: str
 
+
 class ContainerLogsResponse(BaseModel):
     success: bool
     container_id: str
     logs: str
 
+
 class ProjectStatusRequest(BaseModel):
     container_id: str
 
+
 class ProjectStatusByProjectIdRequest(BaseModel):
     project_id: str
+
 
 class ProjectRerunRequest(BaseModel):
     project_id: str
@@ -116,6 +138,7 @@ class ProjectRerunRequest(BaseModel):
     command: Optional[str] = None
     no_rebuild: Optional[bool] = False
 
+
 class ProjectRerunResponse(BaseModel):
     success: bool
     old_container_id: str
@@ -124,6 +147,7 @@ class ProjectRerunResponse(BaseModel):
     ports: Optional[Dict[str, int]] = None
     message: str
     status: Optional[str] = None
+
 
 class ProjectScaleRequest(BaseModel):
     project_name: str
@@ -135,6 +159,7 @@ class ProjectScaleRequest(BaseModel):
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
 
+
 class ProjectScaleResponse(BaseModel):
     success: bool
     project_name: str
@@ -143,6 +168,7 @@ class ProjectScaleResponse(BaseModel):
     containers: List[Dict[str, Any]]
     compose_file: Optional[str] = None
     message: str
+
 
 class ProjectStatusResponse(BaseModel):
     success: bool
@@ -156,6 +182,7 @@ class ProjectStatusResponse(BaseModel):
     image: str
     message: str
 
+
 class ProjectInfo(BaseModel):
     project_id: str
     project_name: str
@@ -166,20 +193,32 @@ class ProjectInfo(BaseModel):
     started_at: str
     image: str
 
+
 class ProjectsListResponse(BaseModel):
     success: bool
     projects: List[ProjectInfo]
     message: str
 
+
 # Global variables for tracking
 start_time = datetime.now()
 
+# Initialize database manager
+try:
+    db_manager = DatabaseManager()
+    db_manager.init_database()
+    print("Database initialized successfully")
+except Exception as e:
+    print(f"Warning: Failed to initialize database: {e}")
+    db_manager = None
+
 # Initialize container manager
 try:
-    container_manager = ContainerManager()
+    container_manager = ContainerManager(db_manager=db_manager)
 except Exception as e:
     print(f"Warning: Failed to initialize Docker container manager: {e}")
     container_manager = None
+
 
 @app.get("/", response_model=Dict[str, str])
 async def root():
@@ -189,14 +228,15 @@ async def root():
         "version": "0.1.0",
         "docs": "/docs",
         "health": "/health",
-        "liveness": "/liveness"
+        "liveness": "/liveness",
     }
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """
     Health check endpoint for monitoring service health.
-    
+
     Returns:
         HealthResponse: Service health status and metadata
     """
@@ -204,36 +244,36 @@ async def health_check():
         status="healthy",
         timestamp=datetime.now().isoformat(),
         version="0.1.0",
-        service="racer-api"
+        service="racer-api",
     )
+
 
 @app.get("/liveness", response_model=LivenessResponse)
 async def liveness_check():
     """
     Liveness probe endpoint for container orchestration.
-    
+
     This endpoint is used by container orchestrators (like Kubernetes)
     to determine if the service is alive and should continue running.
-    
+
     Returns:
         LivenessResponse: Service liveness status and uptime
     """
     uptime = datetime.now() - start_time
     return LivenessResponse(
-        alive=True,
-        timestamp=datetime.now().isoformat(),
-        uptime=str(uptime)
+        alive=True, timestamp=datetime.now().isoformat(), uptime=str(uptime)
     )
+
 
 @app.get("/ready")
 async def readiness_check():
     """
     Readiness probe endpoint for container orchestration.
-    
+
     This endpoint indicates if the service is ready to accept traffic.
     In a full implementation, this would check database connections,
     external dependencies, etc.
-    
+
     Returns:
         dict: Readiness status
     """
@@ -243,19 +283,20 @@ async def readiness_check():
         "timestamp": datetime.now().isoformat(),
         "checks": {
             "database": "ok",  # Placeholder
-            "docker": "ok",    # Placeholder
-            "conda": "ok"      # Placeholder
-        }
+            "docker": "ok",  # Placeholder
+            "conda": "ok",  # Placeholder
+        },
     }
+
 
 @app.post("/validate", response_model=ProjectValidationResponse)
 async def validate_project(request: ProjectValidationRequest):
     """
     Validate a conda-project directory or git repository.
-    
+
     Args:
         request: ProjectValidationRequest with either project_path or git_url
-        
+
     Returns:
         ProjectValidationResponse with validation results
     """
@@ -264,32 +305,30 @@ async def validate_project(request: ProjectValidationRequest):
             # Validate local directory
             validation_result = validate_conda_project(request.project_path)
             return ProjectValidationResponse(**validation_result)
-            
+
         elif request.git_url:
             # Validate git repository
             validation_result = validate_git_repository(request.git_url)
             return ProjectValidationResponse(**validation_result)
-            
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Either project_path or git_url must be provided"
+                detail="Either project_path or git_url must be provided",
             )
-            
+
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Validation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
+
 
 @app.post("/dockerfile", response_model=DockerfileGenerationResponse)
 async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
     """
     Generate a Dockerfile for a conda-project.
-    
+
     Args:
         request: DockerfileGenerationRequest with project details
-        
+
     Returns:
         DockerfileGenerationResponse with generated Dockerfile
     """
@@ -301,70 +340,71 @@ async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
             project_path = validation_result["project_path"]
             temp_dir = project_path  # Mark for cleanup
             project_name = validation_result["project_name"]
-            
+
         elif request.project_path:
             # Validate local directory
             validation_result = validate_conda_project(request.project_path)
             project_path = validation_result["project_path"]
             project_name = validation_result["project_name"]
-            
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Either project_path or git_url must be provided"
+                detail="Either project_path or git_url must be provided",
             )
-        
+
         # Generate Dockerfile
         dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
-        dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
-        
+        dockerfile_path = write_dockerfile(
+            project_path, custom_commands=request.custom_commands
+        )
+
         return DockerfileGenerationResponse(
             success=True,
             dockerfile_path=dockerfile_path,
             dockerfile_content=dockerfile_content,
             project_name=project_name,
-            message=f"Dockerfile generated successfully for {project_name}"
+            message=f"Dockerfile generated successfully for {project_name}",
         )
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=400,
-            detail=f"Dockerfile generation failed: {str(e)}"
+            status_code=400, detail=f"Dockerfile generation failed: {str(e)}"
         )
     finally:
         # Clean up temporary directory if we cloned a git repo
         if temp_dir and request.git_url:
             cleanup_temp_directory(temp_dir)
 
+
 @app.post("/run")
-async def run_project(request: DockerfileGenerationRequest, background_tasks: BackgroundTasks):
+async def run_project(
+    request: DockerfileGenerationRequest, background_tasks: BackgroundTasks
+):
     """
     Run a conda-project by generating Dockerfile and building/running container.
-    
+
     This is a simplified version that generates the Dockerfile and returns
     instructions for building and running the container.
-    
+
     Args:
         request: DockerfileGenerationRequest with project details
         background_tasks: FastAPI background tasks
-        
+
     Returns:
         dict: Instructions for building and running the container
     """
     try:
         # First generate the Dockerfile
         dockerfile_response = await generate_dockerfile_endpoint(request)
-        
+
         if not dockerfile_response.success:
-            raise HTTPException(
-                status_code=400,
-                detail="Failed to generate Dockerfile"
-            )
-        
+            raise HTTPException(status_code=400, detail="Failed to generate Dockerfile")
+
         # Return build and run instructions
         project_name = dockerfile_response.project_name
         dockerfile_path = dockerfile_response.dockerfile_path
-        
+
         return {
             "success": True,
             "project_name": project_name,
@@ -372,34 +412,33 @@ async def run_project(request: DockerfileGenerationRequest, background_tasks: Ba
             "instructions": {
                 "build": f"docker build -t {project_name} -f {dockerfile_path} .",
                 "run": f"docker run -p 8000:8000 {project_name}",
-                "run_interactive": f"docker run -it -p 8000:8000 {project_name} /bin/bash"
+                "run_interactive": f"docker run -it -p 8000:8000 {project_name} /bin/bash",
             },
-            "message": f"Project {project_name} is ready to build and run"
+            "message": f"Project {project_name} is ready to build and run",
         }
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=400,
-            detail=f"Failed to prepare project for running: {str(e)}"
+            status_code=400, detail=f"Failed to prepare project for running: {str(e)}"
         )
+
 
 @app.post("/containers/run", response_model=ContainerRunResponse)
 async def run_container(request: ContainerRunRequest):
     """
     Build and run a Docker container for a conda-project.
-    
+
     Args:
         request: ContainerRunRequest with project details and run options
-        
+
     Returns:
         ContainerRunResponse with container information
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     temp_dir = None
     try:
         # First validate and prepare the project
@@ -415,221 +454,203 @@ async def run_container(request: ContainerRunRequest):
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Either project_path or git_url must be provided"
+                detail="Either project_path or git_url must be provided",
             )
-        
+
         # Generate Dockerfile
         dockerfile_path = os.path.join(project_path, "Dockerfile")
         dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
         write_dockerfile(project_path, dockerfile_path, request.custom_commands)
-        
+
         # Build Docker image
         build_result = container_manager.build_image(
             project_path, project_name, dockerfile_path, request.custom_commands
         )
-        
+
         if not build_result["success"]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to build Docker image: {build_result['error']}"
+                detail=f"Failed to build Docker image: {build_result['error']}",
             )
-        
+
         # Run container
         run_result = container_manager.run_container(
             project_name=project_name,
             ports=request.ports,
             environment=request.environment,
-            command=request.command
+            command=request.command,
         )
-        
+
         if not run_result["success"]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to run container: {run_result['error']}"
+                detail=f"Failed to run container: {run_result['error']}",
             )
-        
+
         return ContainerRunResponse(**run_result)
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=400,
-            detail=f"Failed to run container: {str(e)}"
+            status_code=400, detail=f"Failed to run container: {str(e)}"
         )
     finally:
         # Clean up temporary directory if we cloned a git repo
         if temp_dir and request.git_url:
             cleanup_temp_directory(temp_dir)
 
+
 @app.get("/containers", response_model=Dict[str, Any])
 async def list_containers():
     """
     List all tracked containers.
-    
+
     Returns:
         Dictionary with container list
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     try:
         result = container_manager.list_containers()
         return result
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list containers: {str(e)}"
+            status_code=500, detail=f"Failed to list containers: {str(e)}"
         )
+
 
 @app.get("/containers/{container_id}/status", response_model=ContainerStatusResponse)
 async def get_container_status(container_id: str):
     """
     Get the status of a specific container.
-    
+
     Args:
         container_id: ID of the container
-        
+
     Returns:
         ContainerStatusResponse with container status
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     try:
         result = container_manager.get_container_status(container_id)
         if not result["success"]:
-            raise HTTPException(
-                status_code=404,
-                detail=result["message"]
-            )
+            raise HTTPException(status_code=404, detail=result["message"])
         return ContainerStatusResponse(**result)
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get container status: {str(e)}"
+            status_code=500, detail=f"Failed to get container status: {str(e)}"
         )
+
 
 @app.get("/containers/{container_id}/logs", response_model=ContainerLogsResponse)
 async def get_container_logs(container_id: str, tail: int = 100):
     """
     Get logs from a specific container.
-    
+
     Args:
         container_id: ID of the container
         tail: Number of lines to return
-        
+
     Returns:
         ContainerLogsResponse with container logs
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     try:
         result = container_manager.get_container_logs(container_id, tail)
         if not result["success"]:
-            raise HTTPException(
-                status_code=404,
-                detail=result["message"]
-            )
+            raise HTTPException(status_code=404, detail=result["message"])
         return ContainerLogsResponse(**result)
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get container logs: {str(e)}"
+            status_code=500, detail=f"Failed to get container logs: {str(e)}"
         )
+
 
 @app.post("/containers/{container_id}/stop")
 async def stop_container(container_id: str):
     """
     Stop a running container.
-    
+
     Args:
         container_id: ID of the container to stop
-        
+
     Returns:
         Dictionary with stop results
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     try:
         result = container_manager.stop_container(container_id)
         if not result["success"]:
-            raise HTTPException(
-                status_code=404,
-                detail=result["message"]
-            )
+            raise HTTPException(status_code=404, detail=result["message"])
         return result
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to stop container: {str(e)}"
+            status_code=500, detail=f"Failed to stop container: {str(e)}"
         )
+
 
 @app.delete("/containers/{container_id}")
 async def remove_container(container_id: str):
     """
     Remove a container.
-    
+
     Args:
         container_id: ID of the container to remove
-        
+
     Returns:
         Dictionary with removal results
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     try:
         result = container_manager.remove_container(container_id)
         if not result["success"]:
-            raise HTTPException(
-                status_code=404,
-                detail=result["message"]
-            )
+            raise HTTPException(status_code=404, detail=result["message"])
         return result
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to remove container: {str(e)}"
+            status_code=500, detail=f"Failed to remove container: {str(e)}"
         )
+
 
 @app.post("/containers/cleanup")
 async def cleanup_containers():
     """
     Clean up stopped containers.
-    
+
     Returns:
         Dictionary with cleanup results
     """
     if container_manager is None:
         raise HTTPException(
-            status_code=500,
-            detail="Docker container manager not available"
+            status_code=500, detail="Docker container manager not available"
         )
-    
+
     try:
         result = container_manager.cleanup_stopped_containers()
         return result
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to cleanup containers: {str(e)}"
+            status_code=500, detail=f"Failed to cleanup containers: {str(e)}"
         )
+
 
 @app.get("/projects", response_model=ProjectsListResponse)
 async def list_projects():
@@ -643,17 +664,17 @@ async def list_projects():
             return ProjectsListResponse(
                 success=False,
                 projects=[],
-                message=f"Failed to list containers: {containers_response.get('error', 'Unknown error')}"
+                message=f"Failed to list containers: {containers_response.get('error', 'Unknown error')}",
             )
-        
+
         containers = containers_response.get("containers", [])
         projects = []
-        
+
         for container in containers:
             # Extract project name from container name
             container_name = container.get("container_name", "")
             project_name = container_name
-            
+
             # Try to extract project name from various naming patterns
             if container_name.startswith("racer-"):
                 # Remove racer- prefix and timestamp suffix
@@ -675,11 +696,11 @@ async def list_projects():
                         project_parts.append(part)
                     if project_parts:
                         project_name = "-".join(project_parts)
-            
+
             # Create project ID (short container ID for user reference)
             container_id = container.get("container_id", "")
             project_id = container_id[:12] if container_id else "unknown"
-            
+
             project_info = ProjectInfo(
                 project_id=project_id,
                 project_name=project_name,
@@ -688,21 +709,21 @@ async def list_projects():
                 status=container.get("status", "unknown"),
                 ports=container.get("ports", {}),
                 started_at=container.get("started_at", ""),
-                image=container.get("image", "unknown")
+                image=container.get("image", "unknown"),
             )
             projects.append(project_info)
-        
+
         return ProjectsListResponse(
             success=True,
             projects=projects,
-            message=f"Found {len(projects)} running projects"
+            message=f"Found {len(projects)} running projects",
         )
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list projects: {str(e)}"
+            status_code=500, detail=f"Failed to list projects: {str(e)}"
         )
+
 
 @app.post("/project/status", response_model=ProjectStatusResponse)
 async def get_project_status(request: ProjectStatusRequest):
@@ -711,7 +732,7 @@ async def get_project_status(request: ProjectStatusRequest):
     """
     try:
         container_id = request.container_id
-        
+
         # Get container status
         container_status = container_manager.get_container_status(container_id)
         if not container_status["success"]:
@@ -725,16 +746,16 @@ async def get_project_status(request: ProjectStatusRequest):
                 ports={},
                 started_at="",
                 image="unknown",
-                message=f"Container not found: {container_status.get('error', 'Unknown error')}"
+                message=f"Container not found: {container_status.get('error', 'Unknown error')}",
             )
-        
+
         # Extract container info
         container_name = container_status["container_name"]
         container_status_str = container_status["status"]
         ports = container_status["ports"]
         started_at = container_status["started_at"]
         image = container_status["image"]
-        
+
         # Check if container is running
         if container_status_str != "running":
             return ProjectStatusResponse(
@@ -747,41 +768,41 @@ async def get_project_status(request: ProjectStatusRequest):
                 ports=ports,
                 started_at=started_at,
                 image=image,
-                message=f"Container is {container_status_str}"
+                message=f"Container is {container_status_str}",
             )
-        
+
         # Try to check app health if container is running
         app_health = None
         app_accessible = False
-        
+
         try:
             import requests
             import time
-            
+
             # Find the internal port (usually 8000)
             internal_port = None
             for port_mapping in ports.values():
                 if isinstance(port_mapping, dict) and "8000/tcp" in port_mapping:
                     internal_port = 8000
                     break
-            
+
             if internal_port:
                 # Try to reach the app's health endpoint
                 health_url = f"http://localhost:{list(ports.keys())[0]}/health"
-                
+
                 # Give the app a moment to start up
                 time.sleep(0.5)
-                
+
                 response = requests.get(health_url, timeout=5)
                 if response.status_code == 200:
                     app_health = response.json()
                     app_accessible = True
-                    
+
         except Exception as e:
             # App health check failed, but container is running
             app_health = {"error": f"Health check failed: {str(e)}"}
             app_accessible = False
-        
+
         return ProjectStatusResponse(
             success=True,
             container_id=container_id,
@@ -792,14 +813,14 @@ async def get_project_status(request: ProjectStatusRequest):
             ports=ports,
             started_at=started_at,
             image=image,
-            message="Project status retrieved successfully"
+            message="Project status retrieved successfully",
         )
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get project status: {str(e)}"
+            status_code=500, detail=f"Failed to get project status: {str(e)}"
         )
+
 
 @app.post("/project/status-by-id", response_model=ProjectStatusResponse)
 async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
@@ -808,7 +829,7 @@ async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
     """
     try:
         project_id = request.project_id
-        
+
         # First, get all projects to find the container ID
         projects_response = await list_projects()
         if not projects_response.success:
@@ -822,16 +843,18 @@ async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
                 ports={},
                 started_at="",
                 image="unknown",
-                message=f"Failed to list projects: {projects_response.message}"
+                message=f"Failed to list projects: {projects_response.message}",
             )
-        
+
         # Find the project by project_id
         target_project = None
         for project in projects_response.projects:
-            if project.project_id == project_id or project.project_id.startswith(project_id):
+            if project.project_id == project_id or project.project_id.startswith(
+                project_id
+            ):
                 target_project = project
                 break
-        
+
         if not target_project:
             return ProjectStatusResponse(
                 success=False,
@@ -843,18 +866,18 @@ async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
                 ports={},
                 started_at="",
                 image="unknown",
-                message=f"Project with ID '{project_id}' not found"
+                message=f"Project with ID '{project_id}' not found",
             )
-        
+
         # Get detailed status using container ID
         status_request = ProjectStatusRequest(container_id=target_project.container_id)
         return await get_project_status(status_request)
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get project status by ID: {str(e)}"
+            status_code=500, detail=f"Failed to get project status by ID: {str(e)}"
         )
+
 
 @app.post("/project/rerun", response_model=ProjectRerunResponse)
 async def rerun_project(request: ProjectRerunRequest):
@@ -863,33 +886,35 @@ async def rerun_project(request: ProjectRerunRequest):
     """
     try:
         project_id = request.project_id
-        
+
         # First, get all projects to find the container ID
         projects_response = await list_projects()
         if not projects_response.success:
             return ProjectRerunResponse(
                 success=False,
                 old_container_id="unknown",
-                message=f"Failed to list projects: {projects_response.message}"
+                message=f"Failed to list projects: {projects_response.message}",
             )
-        
+
         # Find the project by project_id
         target_project = None
         for project in projects_response.projects:
-            if project.project_id == project_id or project.project_id.startswith(project_id):
+            if project.project_id == project_id or project.project_id.startswith(
+                project_id
+            ):
                 target_project = project
                 break
-        
+
         if not target_project:
             return ProjectRerunResponse(
                 success=False,
                 old_container_id="unknown",
-                message=f"Project with ID '{project_id}' not found"
+                message=f"Project with ID '{project_id}' not found",
             )
-        
+
         old_container_id = target_project.container_id
         old_container_name = target_project.container_name
-        
+
         # Stop the existing container
         try:
             stop_response = container_manager.stop_container(old_container_id)
@@ -897,90 +922,91 @@ async def rerun_project(request: ProjectRerunRequest):
                 return ProjectRerunResponse(
                     success=False,
                     old_container_id=old_container_id,
-                    message=f"Failed to stop existing container: {stop_response.get('error', 'Unknown error')}"
+                    message=f"Failed to stop existing container: {stop_response.get('error', 'Unknown error')}",
                 )
         except Exception as e:
             return ProjectRerunResponse(
                 success=False,
                 old_container_id=old_container_id,
-                message=f"Failed to stop existing container: {str(e)}"
+                message=f"Failed to stop existing container: {str(e)}",
             )
-        
+
         # Extract project information from the old container
         # We'll need to get the original project path or git URL
         # For now, we'll try to extract it from the container name or image
         project_name = target_project.project_name
-        
+
         # Try to determine the project source
         # This is a simplified approach - in a real implementation, you might store
         # the original project path/git URL in container labels or metadata
         project_path = None
         git_url = None
-        
+
         # Check if we can find the project by name in common locations
         import os
         from pathlib import Path
-        
+
         # Look for project in current directory and common locations
         possible_paths = [
             f"./{project_name}",
             f"./test-project",  # fallback for test projects
-            f"/Users/jesse/Code/pws/racer/test-project"  # specific test path
+            f"/Users/jesse/Code/pws/racer/test-project",  # specific test path
         ]
-        
+
         for path in possible_paths:
             if os.path.exists(path) and os.path.isdir(path):
                 project_path = path
                 break
-        
+
         if not project_path:
             return ProjectRerunResponse(
                 success=False,
                 old_container_id=old_container_id,
-                message=f"Could not locate project source for '{project_name}'. Please specify project path or git URL."
+                message=f"Could not locate project source for '{project_name}'. Please specify project path or git URL.",
             )
-        
+
         # Prepare run request with same configuration as original
         run_request_data = {
-            'project_name': project_name,
-            'ports': request.ports or target_project.ports,
-            'environment': request.environment,
-            'command': request.command
+            "project_name": project_name,
+            "ports": request.ports or target_project.ports,
+            "environment": request.environment,
+            "command": request.command,
         }
-        
+
         # Rebuild the Docker image with updated source files (unless no_rebuild is True)
         if not request.no_rebuild:
             try:
                 # First, generate a new Dockerfile
                 dockerfile_response = generate_dockerfile(
-                    project_path=project_path,
-                    custom_commands=request.custom_commands
+                    project_path=project_path, custom_commands=request.custom_commands
                 )
-                
+
                 # Write the Dockerfile
-                dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
-                
+                dockerfile_path = write_dockerfile(
+                    project_path, custom_commands=request.custom_commands
+                )
+
                 # Build the new image
                 build_response = container_manager.build_image(
                     project_path=project_path,
                     dockerfile_path=dockerfile_path,
-                    image_name=f"{project_name}:latest"
+                    image_name=f"{project_name}:latest",
                 )
-                
+
                 if not build_response["success"]:
                     return ProjectRerunResponse(
                         success=False,
                         old_container_id=old_container_id,
-                        message=f"Failed to rebuild image: {build_response.get('error', 'Unknown error')}"
+                        message=f"Failed to rebuild image: {build_response.get('error', 'Unknown error')}",
                     )
-                
+
             except Exception as e:
                 return ProjectRerunResponse(
                     success=False,
                     old_container_id=old_container_id,
-                    message=f"Failed to rebuild image: {str(e)}"
+                    message=f"Failed to rebuild image: {str(e)}",
                 )
-        
+
         # Start new container with rebuilt image
         try:
             run_response = container_manager.run_container(**run_request_data)
@@ -988,10 +1014,14 @@ async def rerun_project(request: ProjectRerunRequest):
                 return ProjectRerunResponse(
                     success=False,
                     old_container_id=old_container_id,
-                    message=f"Failed to start new container: {run_response.get('error', 'Unknown error')}"
+                    message=f"Failed to start new container: {run_response.get('error', 'Unknown error')}",
                 )
-            
-            rebuild_status = "with rebuilt image" if not request.no_rebuild else "with existing image"
+
+            rebuild_status = (
+                "with rebuilt image"
+                if not request.no_rebuild
+                else "with existing image"
+            )
             return ProjectRerunResponse(
                 success=True,
                 old_container_id=old_container_id,
@@ -999,21 +1029,21 @@ async def rerun_project(request: ProjectRerunRequest):
                 new_container_name=run_response.get("container_name"),
                 ports=run_response.get("ports"),
                 message=f"Successfully reran project '{project_name}' {rebuild_status}",
-                status=run_response.get("status")
+                status=run_response.get("status"),
             )
-            
+
         except Exception as e:
             return ProjectRerunResponse(
                 success=False,
                 old_container_id=old_container_id,
-                message=f"Failed to start new container: {str(e)}"
+                message=f"Failed to start new container: {str(e)}",
             )
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to rerun project: {str(e)}"
+            status_code=500, detail=f"Failed to rerun project: {str(e)}"
         )
+
 
 @app.post("/project/scale", response_model=ProjectScaleResponse)
 async def scale_project(request: ProjectScaleRequest):
@@ -1025,7 +1055,7 @@ async def scale_project(request: ProjectScaleRequest):
         instances = request.instances
         project_path = request.project_path
         git_url = request.git_url
-        
+
         if not project_path and not git_url:
             return ProjectScaleResponse(
                 success=False,
@@ -1033,9 +1063,9 @@ async def scale_project(request: ProjectScaleRequest):
                 requested_instances=instances,
                 created_instances=0,
                 containers=[],
-                message="Either project_path or git_url must be specified"
+                message="Either project_path or git_url must be specified",
             )
-        
+
         # Validate project if path is provided
         if project_path:
             validation_result = validate_conda_project(project_path)
@@ -1046,22 +1076,23 @@ async def scale_project(request: ProjectScaleRequest):
                     requested_instances=instances,
                     created_instances=0,
                     containers=[],
-                    message=f"Project validation failed: {', '.join(validation_result.get('errors', []))}"
+                    message=f"Project validation failed: {', '.join(validation_result.get('errors', []))}",
                 )
         elif git_url:
             # For git URLs, we'll validate during container creation
             pass
-        
+
         # Generate Dockerfile first
         if project_path:
             dockerfile_response = generate_dockerfile(
-                project_path=project_path,
-                custom_commands=request.custom_commands
+                project_path=project_path, custom_commands=request.custom_commands
             )
-            
+
             # Write Dockerfile
-            dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
-        
+            dockerfile_path = write_dockerfile(
+                project_path, custom_commands=request.custom_commands
+            )
+
         # Generate Docker Compose file
         compose_content = generate_compose_file(
             project_name=project_name,
@@ -1071,28 +1102,28 @@ async def scale_project(request: ProjectScaleRequest):
             environment=request.environment,
             command=request.command,
             custom_commands=request.custom_commands,
-            use_load_balancer=False  # Use port range instead of load balancer
+            use_load_balancer=False,  # Use port range instead of load balancer
         )
-        
+
         # Write Docker Compose file
         compose_file_path = write_compose_file(project_path or ".", compose_content)
-        
+
         # Use Docker Compose to scale the service
         import subprocess
         import os
-        
+
         # Change to project directory
         original_cwd = os.getcwd()
         os.chdir(project_path or ".")
-        
+
         try:
             # Stop any existing services
             subprocess.run(["docker-compose", "down"], capture_output=True, text=True)
-            
+
             # Build and start all services
             scale_cmd = ["docker-compose", "up", "-d", "--build"]
             result = subprocess.run(scale_cmd, capture_output=True, text=True)
-            
+
             if result.returncode != 0:
                 return ProjectScaleResponse(
                     success=False,
@@ -1101,45 +1132,52 @@ async def scale_project(request: ProjectScaleRequest):
                     created_instances=0,
                     containers=[],
                     compose_file=compose_file_path,
-                    message=f"Docker Compose failed: {result.stderr}"
+                    message=f"Docker Compose failed: {result.stderr}",
                 )
-            
+
             # Get running containers
-            ps_result = subprocess.run(["docker-compose", "ps", "--format", "json"], 
-                                     capture_output=True, text=True)
-            
+            ps_result = subprocess.run(
+                ["docker-compose", "ps", "--format", "json"],
+                capture_output=True,
+                text=True,
+            )
+
             created_containers = []
             if ps_result.returncode == 0:
                 import json
+
                 try:
                     containers_data = json.loads(ps_result.stdout)
                     if not isinstance(containers_data, list):
                         containers_data = [containers_data]
-                    
+
                     for i, container in enumerate(containers_data):
                         if container.get("State") == "running":
                             container_info = {
-                                'container_id': container.get("ID", "")[:12],
-                                'container_name': container.get("Name", ""),
-                                'ports': request.ports or {"8000": 8000},
-                                'status': container.get("State", "unknown"),
-                                'instance': i + 1
+                                "container_id": container.get("ID", "")[:12],
+                                "container_name": container.get("Name", ""),
+                                "ports": request.ports or {"8000": 8000},
+                                "status": container.get("State", "unknown"),
+                                "instance": i + 1,
                             }
                             created_containers.append(container_info)
                 except json.JSONDecodeError:
                     # Fallback if JSON parsing fails
-                    created_containers = [{
-                        'container_id': 'unknown',
-                        'container_name': f"{project_name}_{i+1}",
-                        'ports': request.ports or {"8000": 8000},
-                        'status': 'running',
-                        'instance': i + 1
-                    } for i in range(instances)]
-            
+                    created_containers = [
+                        {
+                            "container_id": "unknown",
+                            "container_name": f"{project_name}_{i+1}",
+                            "ports": request.ports or {"8000": 8000},
+                            "status": "running",
+                            "instance": i + 1,
+                        }
+                        for i in range(instances)
+                    ]
+
             # Prepare response
             success = len(created_containers) > 0
             message = f"Successfully scaled {project_name} to {len(created_containers)} instance(s) using Docker Compose"
-            
+
             return ProjectScaleResponse(
                 success=success,
                 project_name=project_name,
@@ -1147,30 +1185,30 @@ async def scale_project(request: ProjectScaleRequest):
                 created_instances=len(created_containers),
                 containers=created_containers,
                 compose_file=compose_file_path,
-                message=message
+                message=message,
             )
-            
+
         finally:
             # Restore original working directory
             os.chdir(original_cwd)
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to scale project: {str(e)}"
+            status_code=500, detail=f"Failed to scale project: {str(e)}"
         )
+
 
 if __name__ == "__main__":
     # Get configuration from environment variables
     host = os.getenv("API_HOST", "0.0.0.0")
     port = int(os.getenv("API_PORT", "8000"))
     debug = os.getenv("DEBUG", "False").lower() == "true"
-    
+
     # Run the server
     uvicorn.run(
         "main:app",
         host=host,
         port=port,
         reload=debug,
-        log_level="info" if not debug else "debug"
+        log_level="info" if not debug else "debug",
     )

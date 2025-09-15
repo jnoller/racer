@@ -1,7 +1,7 @@
 # Racer - Rapid deployment system for conda-projects
 # Makefile for development and deployment automation
 
-.PHONY: help setup clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format
+.PHONY: help setup clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset
 
 # Default target
 help:
@@ -20,6 +20,9 @@ help:
 	@echo "  format        - Format code"
 	@echo "  backend       - Run backend server"
 	@echo "  client        - Install client in development mode"
+	@echo "  db-init       - Initialize database"
+	@echo "  db-clean      - Clean up database (remove all data)"
+	@echo "  db-reset      - Reset database (drop and recreate)"
 
 # Setup conda environment and install dependencies
 setup:
@@ -94,3 +97,15 @@ client:
 	@echo "Installing client in development mode..."
 	conda run -n racer pip install -e src/client/
 	@echo "Client installed. Test with: racerctl --help"
+
+# Database management
+db-init:
+	@echo "Initializing database..."
+	cd src/backend && PYTHONPATH=$(PWD) conda run -n racer python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); db.init_database(); print('Database initialized successfully')"
+
+db-clean:
+	@echo "Cleaning up database..."
+	cd src/backend && PYTHONPATH=$(PWD) conda run -n racer python -c "import sys; sys.path.append('.'); from database import DatabaseManager; db = DatabaseManager(); db.cleanup_database(); print('Database cleaned successfully')"
+
+db-reset: db-clean db-init
+	@echo "Database reset complete"
