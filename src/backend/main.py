@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 import uvicorn
 import os
+import uuid
 from datetime import datetime
 
 # Import our custom modules
@@ -84,6 +85,7 @@ class DockerfileGenerationResponse(BaseModel):
 
 
 class ContainerRunRequest(BaseModel):
+    project_name: str
     project_path: Optional[str] = None
     git_url: Optional[str] = None
     custom_commands: Optional[List[str]] = None
@@ -94,6 +96,7 @@ class ContainerRunRequest(BaseModel):
 
 class ContainerRunResponse(BaseModel):
     success: bool
+    project_id: Optional[str] = None
     container_id: Optional[str] = None
     container_name: Optional[str] = None
     ports: Optional[Dict[str, int]] = None
@@ -118,7 +121,7 @@ class ContainerLogsResponse(BaseModel):
     logs: str
 
 
-class ProjectStatusRequest(BaseModel):
+class ProjectStatusByContainerIdRequest(BaseModel):
     container_id: str
 
 
@@ -126,8 +129,18 @@ class ProjectStatusByProjectIdRequest(BaseModel):
     project_id: str
 
 
+class ProjectStatusByProjectNameRequest(BaseModel):
+    project_name: str
+
+
+class ProjectStatusRequest(BaseModel):
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+
+
 class ProjectRerunRequest(BaseModel):
-    project_id: str
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
     custom_commands: Optional[List[str]] = None
     ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
@@ -437,16 +450,20 @@ async def run_container(request: ContainerRunRequest):
 
     temp_dir = None
     try:
+        # Use the provided project name
+        project_name = request.project_name
+
+        # Auto-generate a unique project ID
+        project_id = str(uuid.uuid4())
+
         # First validate and prepare the project
         if request.git_url:
             validation_result = validate_git_repository(request.git_url)
             project_path = validation_result["project_path"]
             temp_dir = project_path
-            project_name = validation_result["project_name"]
         elif request.project_path:
             validation_result = validate_conda_project(request.project_path)
             project_path = validation_result["project_path"]
-            project_name = validation_result["project_name"]
         else:
             raise HTTPException(
                 status_code=400,
@@ -482,6 +499,8 @@ async def run_container(request: ContainerRunRequest):
                 detail=f"Failed to run container: {run_result['error']}",
             )
 
+        # Add the generated project_id to the response
+        run_result["project_id"] = project_id
         return ContainerRunResponse(**run_result)
 
     except Exception as e:
@@ -666,31 +685,45 @@ async def list_projects():
         projects = []
 
         for container in containers:
-            # Extract project name from container name
             container_name = container.get("container_name", "")
-            project_name = container_name
+            container_id = container.get("container_id", "")
 
-            # Try to extract project name from various naming patterns
-            if container_name.startswith("racer-"):
-                # Remove racer- prefix and timestamp suffix
-                parts = container_name.split("-")
-                if len(parts) >= 3:
-                    project_name = "-".join(parts[1:-1])  # Remove "racer" and timestamp
-                else:
-                    project_name = container_name[6:]  # Just remove "racer-"
-            elif "-" in container_name:
-                # For scale command containers: project-name-timestamp-uuid
-                # Extract the base project name (everything before the first timestamp)
-                parts = container_name.split("-")
-                if len(parts) >= 3:
-                    # Find the first part that looks like a timestamp (all digits)
-                    project_parts = []
-                    for part in parts:
-                        if part.isdigit() and len(part) > 8:  # Timestamp-like
-                            break
-                        project_parts.append(part)
-                    if project_parts:
-                        project_name = "-".join(project_parts)
+            # Try to get project name from database first
+            project_name = container_name  # fallback
+            if db_manager:
+                try:
+                    db_container = db_manager.get_container(container_id)
+                    if db_container and db_container.project:
+                        project_name = db_container.project.name
+                except Exception:
+                    # If database lookup fails, fall back to container name extraction
+                    pass
+
+            # If database lookup failed or not available, extract from container name
+            if project_name == container_name:
+                # Try to extract project name from various naming patterns
+                if container_name.startswith("racer-"):
+                    # Remove racer- prefix and timestamp suffix
+                    parts = container_name.split("-")
+                    if len(parts) >= 3:
+                        project_name = "-".join(
+                            parts[1:-1]
+                        )  # Remove "racer" and timestamp
+                    else:
+                        project_name = container_name[6:]  # Just remove "racer-"
+                elif "-" in container_name:
+                    # For scale command containers: project-name-timestamp-uuid
+                    # Extract the base project name (everything before the first timestamp)
+                    parts = container_name.split("-")
+                    if len(parts) >= 3:
+                        # Find the first part that looks like a timestamp (all digits)
+                        project_parts = []
+                        for part in parts:
+                            if part.isdigit() and len(part) > 8:  # Timestamp-like
+                                break
+                            project_parts.append(part)
+                        if project_parts:
+                            project_name = "-".join(project_parts)
 
             # Create project ID (short container ID for user reference)
             container_id = container.get("container_id", "")
@@ -726,7 +759,68 @@ async def get_project_status(request: ProjectStatusRequest):
     Get comprehensive status of a running project including container and app health.
     """
     try:
-        container_id = request.container_id
+        project_id = request.project_id
+        project_name = request.project_name
+
+        # Validate that either project_id or project_name is provided
+        if not project_id and not project_name:
+            return ProjectStatusResponse(
+                success=False,
+                container_id="unknown",
+                container_name="unknown",
+                container_status="invalid_request",
+                app_health=None,
+                app_accessible=False,
+                ports={},
+                started_at="",
+                image="unknown",
+                message="Either project_id or project_name must be provided",
+            )
+
+        # First, get all projects to find the container ID
+        projects_response = await list_projects()
+        if not projects_response.success:
+            return ProjectStatusResponse(
+                success=False,
+                container_id="unknown",
+                container_name="unknown",
+                container_status="error",
+                app_health=None,
+                app_accessible=False,
+                ports={},
+                started_at="",
+                image="unknown",
+                message=f"Failed to list projects: {projects_response.message}",
+            )
+
+        # Find the project by project_id or project_name
+        target_project = None
+        for project in projects_response.projects:
+            if project_id and (
+                project.project_id == project_id
+                or project.project_id.startswith(project_id)
+            ):
+                target_project = project
+                break
+            elif project_name and project.project_name == project_name:
+                target_project = project
+                break
+
+        if not target_project:
+            return ProjectStatusResponse(
+                success=False,
+                container_id="unknown",
+                container_name="unknown",
+                container_status="not_found",
+                app_health=None,
+                app_accessible=False,
+                ports={},
+                started_at="",
+                image="unknown",
+                message=f"Project not found",
+            )
+
+        container_id = target_project.container_id
 
         # Get container status
         container_status = container_manager.get_container_status(container_id)
@@ -864,8 +958,8 @@ async def get_project_status_by_id(request: ProjectStatusByProjectIdRequest):
                 message=f"Project with ID '{project_id}' not found",
             )
 
-        # Get detailed status using container ID
-        status_request = ProjectStatusRequest(container_id=target_project.container_id)
+        # Get detailed status using project_id
+        status_request = ProjectStatusRequest(project_id=target_project.project_id)
         return await get_project_status(status_request)
 
     except Exception as e:
@@ -881,6 +975,15 @@ async def rerun_project(request: ProjectRerunRequest):
     """
     try:
         project_id = request.project_id
+        project_name = request.project_name
+
+        # Validate that either project_id or project_name is provided
+        if not project_id and not project_name:
+            return ProjectRerunResponse(
+                success=False,
+                old_container_id="unknown",
+                message="Either project_id or project_name must be provided",
+            )
 
         # First, get all projects to find the container ID
         projects_response = await list_projects()
@@ -891,12 +994,16 @@ async def rerun_project(request: ProjectRerunRequest):
                 message=f"Failed to list projects: {projects_response.message}",
             )
 
-        # Find the project by project_id
+        # Find the project by project_id or project_name
         target_project = None
         for project in projects_response.projects:
-            if project.project_id == project_id or project.project_id.startswith(
-                project_id
+            if project_id and (
+                project.project_id == project_id
+                or project.project_id.startswith(project_id)
             ):
+                target_project = project
+                break
+            elif project_name and project.project_name == project_name:
                 target_project = project
                 break
 

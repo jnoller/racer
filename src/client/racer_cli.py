@@ -27,6 +27,13 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 
 @cli.command()
 @click.option(
+    "--project-name",
+    "-n",
+    "project_name",
+    required=True,
+    help="Name for the project (used for container naming)",
+)
+@click.option(
     "--path", "-p", "project_path", help="Path to local conda-project directory"
 )
 @click.option(
@@ -51,6 +58,7 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 @click.pass_context
 def run(
     ctx,
+    project_name: str,
     project_path: str,
     git_url: str,
     custom_commands: str,
@@ -79,7 +87,7 @@ def run(
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
 
         # Prepare request data
-        request_data = {}
+        request_data = {"project_name": project_name}
         if project_path:
             request_data["project_path"] = project_path
         if git_url:
@@ -356,6 +364,17 @@ def status(
     timeout = ctx.obj["timeout"]
     verbose = ctx.obj["verbose"]
 
+    # Validate that at least one identifier is provided (unless listing all projects)
+    if not list_projects and not project_name and not project_id and not container_id:
+        click.echo(
+            click.style(
+                "Error: At least one of --project-name, --project-id, --container-id, or --list must be specified",
+                fg="red",
+            ),
+            err=True,
+        )
+        ctx.exit(1)
+
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
 
@@ -627,6 +646,17 @@ def rerun(
     timeout = ctx.obj["timeout"]
     verbose = ctx.obj["verbose"]
 
+    # Validate that either project_id or project_name is provided
+    if not project_id and not project_name:
+        click.echo(
+            click.style(
+                "Error: Either --project-id or --project-name must be specified",
+                fg="red",
+            ),
+            err=True,
+        )
+        ctx.exit(1)
+
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
 
@@ -816,7 +846,11 @@ def rerun(
 
         # Single instance rerun (either by project_id or single project_name match)
         # Prepare request data
-        request_data = {"project_id": project_id, "no_rebuild": no_rebuild}
+        request_data = {"no_rebuild": no_rebuild}
+        if project_id:
+            request_data["project_id"] = project_id
+        if project_name:
+            request_data["project_name"] = project_name
 
         if custom_commands:
             request_data["custom_commands"] = [
