@@ -31,7 +31,10 @@ setup-all:
 	@echo "🚀 Starting complete Racer setup..."
 	@echo ""
 	@echo "Step 1/6: Cleaning up any existing environments..."
-	@$(MAKE) clean
+	@conda env remove -n racer -y 2>/dev/null || true
+	@conda env remove -n racer-dev -y 2>/dev/null || true
+	@conda env remove -n racer-prod -y 2>/dev/null || true
+	@echo "✅ Environments cleaned up"
 	@echo ""
 	@echo "Step 2/6: Creating development environment..."
 	@$(MAKE) install-dev
