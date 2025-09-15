@@ -28,6 +28,30 @@
 - 📊 **Coverage reporting** and automated testing
 - ⚡ **Fast development** with hot-reload and development tools
 
+## Quickstart
+
+Get up and running with Racer in under 2 minutes:
+
+```bash
+# 1. Clone and setup everything
+git clone <repository-url>
+cd racer
+make setup-all
+
+# 2. Start the backend server
+racerctl server start
+
+# 3. Deploy your first project
+racer run --project-name "my-app" --path /path/to/your/conda-project
+
+# 4. Check status
+racer status --project-name "my-app"
+```
+
+**That's it!** Your conda-project is now running in a Docker container. 
+
+For more details, see the [Quick Start](#quick-start) section below.
+
 ## Prerequisites
 
 Before getting started, ensure you have the following installed on your system:
@@ -293,11 +317,6 @@ make db-reset           # Reset database (drop and recreate)
 
 # Development
 make client            # Install client in development mode
-
-# Note: Backend server management is now handled by racerctl:
-# racerctl server start    # Start backend server
-# racerctl server stop     # Stop backend server
-# racerctl server status   # Check server status
 
 # Testing
 make test              # Run all tests
