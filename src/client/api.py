@@ -17,13 +17,14 @@ class RacerAPIError(Exception):
 class RacerAPIClient:
     """Client for interacting with the Racer API server."""
 
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 30):
+    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 30, verbose: bool = False):
         """
         Initialize the API client.
 
         Args:
             base_url: Base URL of the Racer API server
             timeout: Request timeout in seconds
+            verbose: Enable verbose output
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout

@@ -1077,7 +1077,7 @@ def scale(
         ctx.exit(1)
 
 
-@racer.command()
+@cli.command()
 @click.option(
     "--project-name", "-n", required=True, help="Name of the project to scale up"
 )
@@ -1107,7 +1107,7 @@ def scale_up(ctx, project_name: str, instances: int):
             click.echo(f"Target instances: {instances}")
 
         # Make API call
-        response = client._make_request("POST", "/project/scale-up", request_data)
+        response = client._make_request("POST", "/project/scale-up", json=request_data)
 
         if response.get("success"):
             click.echo(click.style("✓ Project scaled up successfully", fg="green"))
@@ -1143,7 +1143,7 @@ def scale_up(ctx, project_name: str, instances: int):
         ctx.exit(1)
 
 
-@racer.command()
+@cli.command()
 @click.option(
     "--project-name", "-n", required=True, help="Name of the project to scale down"
 )
@@ -1173,7 +1173,7 @@ def scale_down(ctx, project_name: str, instances: int):
             click.echo(f"Target instances: {instances}")
 
         # Make API call
-        response = client._make_request("POST", "/project/scale-down", request_data)
+        response = client._make_request("POST", "/project/scale-down", json=request_data)
 
         if response.get("success"):
             click.echo(click.style("✓ Project scaled down successfully", fg="green"))
@@ -1209,7 +1209,7 @@ def scale_down(ctx, project_name: str, instances: int):
         ctx.exit(1)
 
 
-@racer.command()
+@cli.command()
 @click.option("--project-name", "-n", help="Name of the project to check status")
 @click.pass_context
 def swarm_status(ctx, project_name: str):
@@ -1288,7 +1288,7 @@ def swarm_status(ctx, project_name: str):
         ctx.exit(1)
 
 
-@racer.command()
+@cli.command()
 @click.option("--project-name", "-n", required=True, help="Name of the project to get logs from")
 @click.option("--tail", "-t", default=100, help="Number of log lines to retrieve")
 @click.pass_context
@@ -1331,7 +1331,7 @@ def swarm_logs(ctx, project_name: str, tail: int):
         ctx.exit(1)
 
 
-@racer.command()
+@cli.command()
 @click.option("--project-name", "-n", required=True, help="Name of the project to remove")
 @click.option("--force", "-f", is_flag=True, help="Force removal without confirmation")
 @click.pass_context

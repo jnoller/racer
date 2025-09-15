@@ -160,8 +160,26 @@ class SwarmManager:
                     'start_period': 60
                 }
 
-            # Create the service
-            service = self.client.services.create(**service_spec)
+            # Create the service using proper Docker SDK parameters
+            service = self.client.services.create(
+                image=image,
+                name=service_name,
+                command=command,
+                env=environment,
+                mode=docker.types.ServiceMode('replicated', replicas=replicas),
+                restart_policy=docker.types.RestartPolicy(
+                    condition='on-failure',
+                    delay=5,
+                    max_attempts=3
+                ),
+                healthcheck=docker.types.Healthcheck(
+                    test=['CMD', 'curl', '-f', 'http://localhost:8000/health'],
+                    interval=30 * 10**9,  # 30 seconds in nanoseconds
+                    timeout=10 * 10**9,   # 10 seconds in nanoseconds
+                    retries=3,
+                    start_period=60 * 10**9  # 60 seconds in nanoseconds
+                ) if not healthcheck else docker.types.Healthcheck(**healthcheck)
+            )
             
             # Store in database if available
             if self.db_manager:
@@ -445,7 +463,7 @@ class SwarmManager:
                 }
 
             service = self.client.services.get(service_name)
-            logs = service.logs(tail=tail, timestamps=True)
+            logs = service.logs(tail=tail, timestamps=True, stdout=True, stderr=True)
             
             return {
                 "success": True,

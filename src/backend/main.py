@@ -1334,16 +1334,19 @@ async def scale_project(request: ProjectScaleRequest):
             pass
 
         # Generate Dockerfile first
+        dockerfile_path = None
         if project_path:
             # Write Dockerfile
-            write_dockerfile(project_path, custom_commands=request.custom_commands)
+            dockerfile_path = os.path.join(project_path, "Dockerfile")
+            write_dockerfile(project_path, dockerfile_path, request.custom_commands)
 
         # Build Docker image
         image_name = f"{project_name}:latest"
         build_result = container_manager.build_image(
-            project_name=project_name,
-            project_path=project_path or ".",
-            custom_commands=request.custom_commands,
+            project_path or ".",
+            project_name,
+            dockerfile_path or os.path.join(project_path or ".", "Dockerfile"),
+            request.custom_commands,
         )
 
         if not build_result["success"]:

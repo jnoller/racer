@@ -22,7 +22,7 @@ RUN chown -R 1001:1001 /project
 
 USER 1001
 WORKDIR /project
-RUN ["conda", "project", "prepare", "--force"]
+RUN conda project install --force
 
 ENTRYPOINT ["conda", "project", "run"]
 CMD []
