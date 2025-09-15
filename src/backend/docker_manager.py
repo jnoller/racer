@@ -152,11 +152,23 @@ class ContainerManager:
             Dictionary with stop results
         """
         try:
-            if container_id not in self.running_containers:
+            # Check if container exists in Docker
+            try:
+                container = self.client.containers.get(container_id)
+            except Exception:
                 return {
                     "success": False,
                     "error": "Container not found",
-                    "message": f"Container {container_id} not found in running containers"
+                    "message": f"Container {container_id} not found in Docker"
+                }
+            
+            if container_id not in self.running_containers:
+                # Container exists in Docker but not tracked - add it to tracking
+                self.running_containers[container_id] = {
+                    "container": container,
+                    "container_name": container.name,
+                    "status": container.status,
+                    "started_at": container.attrs.get("State", {}).get("StartedAt", "unknown")
                 }
             
             container_info = self.running_containers[container_id]
@@ -195,11 +207,23 @@ class ContainerManager:
             Dictionary with removal results
         """
         try:
-            if container_id not in self.running_containers:
+            # Check if container exists in Docker
+            try:
+                container = self.client.containers.get(container_id)
+            except Exception:
                 return {
                     "success": False,
                     "error": "Container not found",
-                    "message": f"Container {container_id} not found in running containers"
+                    "message": f"Container {container_id} not found in Docker"
+                }
+            
+            if container_id not in self.running_containers:
+                # Container exists in Docker but not tracked - add it to tracking
+                self.running_containers[container_id] = {
+                    "container": container,
+                    "container_name": container.name,
+                    "status": container.status,
+                    "started_at": container.attrs.get("State", {}).get("StartedAt", "unknown")
                 }
             
             container_info = self.running_containers[container_id]
