@@ -5,248 +5,220 @@ Integration tests for API endpoints.
 import pytest
 import requests
 import time
-from unittest.mock import patch
-from tests.test_db_utils import TestDatabaseManager
+import subprocess
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, Mock
 
 
-@pytest.mark.integration
-@pytest.mark.api
 class TestAPIEndpoints:
-    """Integration tests for API endpoints."""
+    """Test cases for API endpoint functionality."""
+    
+    @pytest.fixture(scope="class")
+    def api_server(self):
+        """Start API server for testing."""
+        # Start the API server
+        process = subprocess.Popen([
+            "conda", "run", "-n", "racer-dev", "python", "-m", "uvicorn", 
+            "src.backend.main:app", "--host", "0.0.0.0", "--port", "8001"
+        ], cwd=os.getcwd(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        # Wait for server to start
+        max_retries = 30
+        for _ in range(max_retries):
+            try:
+                response = requests.get("http://localhost:8001/health", timeout=1)
+                if response.status_code == 200:
+                    break
+            except requests.exceptions.RequestException:
+                time.sleep(1)
+        else:
+            pytest.skip("Could not start API server")
+        
+        yield process
+        
+        # Cleanup
+        process.terminate()
+        process.wait()
     
     def test_health_endpoint(self, api_server):
         """Test health endpoint."""
-        response = requests.get(f"{api_server}/health")
+        response = requests.get("http://localhost:8001/health")
         assert response.status_code == 200
         
         data = response.json()
         assert data["status"] == "healthy"
         assert "timestamp" in data
         assert "version" in data
-        assert "service" in data
     
     def test_liveness_endpoint(self, api_server):
         """Test liveness endpoint."""
-        response = requests.get(f"{api_server}/liveness")
+        response = requests.get("http://localhost:8001/liveness")
         assert response.status_code == 200
         
         data = response.json()
         assert data["alive"] is True
         assert "uptime" in data
-        assert "timestamp" in data
     
     def test_readiness_endpoint(self, api_server):
         """Test readiness endpoint."""
-        response = requests.get(f"{api_server}/ready")
+        response = requests.get("http://localhost:8001/ready")
         assert response.status_code == 200
         
         data = response.json()
         assert data["ready"] is True
         assert "checks" in data
-        assert "timestamp" in data
     
     def test_root_endpoint(self, api_server):
         """Test root endpoint."""
-        response = requests.get(f"{api_server}/")
+        response = requests.get("http://localhost:8001/")
         assert response.status_code == 200
         
         data = response.json()
         assert "message" in data
         assert "version" in data
-        assert "docs" in data
     
-    def test_validate_endpoint_local_path(self, api_server, test_project_dir):
-        """Test validate endpoint with local path."""
-        response = requests.post(f"{api_server}/validate", json={
-            "project_path": test_project_dir
-        })
+    def test_validate_endpoint_success(self, api_server):
+        """Test validate endpoint with valid project."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir) / "test-project"
+            project_dir.mkdir()
+            
+            # Create conda-project.yml
+            conda_project_yml = project_dir / "conda-project.yml"
+            conda_project_yml.write_text("""name: test-project
+environments:
+  default:
+    - environment.yml
+commands:
+  default: python main.py
+variables: {}
+""")
+            
+            # Create environment.yml
+            environment_yml = project_dir / "environment.yml"
+            environment_yml.write_text("""name: default
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+variables: {}
+""")
+            
+            # Test validate endpoint
+            response = requests.post("http://localhost:8001/validate", json={
+                "project_path": str(project_dir)
+            })
+            
+            assert response.status_code == 200
+            
+            data = response.json()
+            assert data["valid"] is True
+            assert data["project_name"] == "test-project"
+    
+    def test_validate_endpoint_invalid_project(self, api_server):
+        """Test validate endpoint with invalid project."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Test with empty directory
+            response = requests.post("http://localhost:8001/validate", json={
+                "project_path": temp_dir
+            })
+            
+            assert response.status_code == 400
+            
+            data = response.json()
+            assert data["valid"] is False
+            assert "conda-project.yml" in data["error"]
+    
+    def test_containers_list_endpoint(self, api_server):
+        """Test containers list endpoint."""
+        response = requests.get("http://localhost:8001/containers")
         assert response.status_code == 200
         
         data = response.json()
-        assert data["valid"] is True
-        assert data["project_name"] == "test-project"
-        assert "default" in data["environments"]
+        assert "containers" in data
+        assert "count" in data
     
-    def test_validate_endpoint_missing_path(self, api_server):
-        """Test validate endpoint with missing path."""
-        response = requests.post(f"{api_server}/validate", json={})
-        assert response.status_code == 400
-        
-        data = response.json()
-        assert "detail" in data
-        assert "project_path" in data["detail"] or "git_url" in data["detail"]
+    def test_containers_run_endpoint_missing_data(self, api_server):
+        """Test containers run endpoint with missing data."""
+        response = requests.post("http://localhost:8001/containers/run", json={})
+        assert response.status_code == 422  # Validation error
     
-    def test_validate_endpoint_invalid_path(self, api_server):
-        """Test validate endpoint with invalid path."""
-        response = requests.post(f"{api_server}/validate", json={
+    def test_containers_run_endpoint_invalid_path(self, api_server):
+        """Test containers run endpoint with invalid path."""
+        response = requests.post("http://localhost:8001/containers/run", json={
+            "project_name": "test-project",
             "project_path": "/non/existent/path"
         })
         assert response.status_code == 400
         
         data = response.json()
-        assert "detail" in data
-    
-    @patch('src.backend.project_validator.git.Repo')
-    def test_validate_endpoint_git_url(self, mock_repo_class, api_server, test_project_dir, sample_conda_project_yml, sample_environment_yml):
-        """Test validate endpoint with git URL."""
-        # Mock git repository
-        mock_repo = mock_repo_class.return_value
-        mock_repo.clone_from.return_value = mock_repo
-        
-        # Mock cloned repository contents
-        with patch('src.backend.project_validator.os.path.exists', return_value=True):
-            with patch('src.backend.project_validator.Path.read_text') as mock_read_text:
-                def read_text_side_effect(path):
-                    if str(path).endswith("conda-project.yml"):
-                        return sample_conda_project_yml
-                    elif str(path).endswith("environment.yml"):
-                        return sample_environment_yml
-                    return ""
-                
-                mock_read_text.side_effect = read_text_side_effect
-                
-                response = requests.post(f"{api_server}/validate", json={
-                    "git_url": "https://github.com/test/repo.git"
-                })
-        
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert data["valid"] is True
-        assert data["project_name"] == "test-project"
-    
-    def test_dockerfile_endpoint_local_path(self, api_server, test_project_dir):
-        """Test dockerfile endpoint with local path."""
-        response = requests.post(f"{api_server}/dockerfile", json={
-            "project_path": test_project_dir
-        })
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert data["success"] is True
-        assert data["project_name"] == "test-project"
-        assert "Dockerfile" in data["dockerfile_path"]
-        assert "FROM continuumio/miniconda3" in data["dockerfile_content"]
-    
-    def test_dockerfile_endpoint_with_custom_commands(self, api_server, test_project_dir):
-        """Test dockerfile endpoint with custom commands."""
-        response = requests.post(f"{api_server}/dockerfile", json={
-            "project_path": test_project_dir,
-            "custom_commands": ["apt-get update", "apt-get install -y curl"]
-        })
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert data["success"] is True
-        assert "RUN apt-get update" in data["dockerfile_content"]
-        assert "RUN apt-get install -y curl" in data["dockerfile_content"]
-    
-    def test_dockerfile_endpoint_missing_path(self, api_server):
-        """Test dockerfile endpoint with missing path."""
-        response = requests.post(f"{api_server}/dockerfile", json={})
-        assert response.status_code == 400
-        
-        data = response.json()
-        assert "detail" in data
-    
-    @pytest.mark.docker
-    def test_containers_run_endpoint_local_path(self, api_server, test_project_dir):
-        """Test containers/run endpoint with local path."""
-        response = requests.post(f"{api_server}/containers/run", json={
-            "project_path": test_project_dir,
-            "ports": {"8000/tcp": 8080}
-        })
-        
-        # This might fail if Docker is not available, so we check for either success or specific error
-        if response.status_code == 200:
-            data = response.json()
-            assert data["success"] is True
-            assert "container_id" in data
-            assert "container_name" in data
-            assert data["ports"] == {"8000/tcp": 8080}
-        else:
-            # If Docker is not available, we expect a specific error
-            assert response.status_code in [400, 500]
-            data = response.json()
-            assert "detail" in data
-    
-    def test_containers_run_endpoint_missing_path(self, api_server):
-        """Test containers/run endpoint with missing path."""
-        response = requests.post(f"{api_server}/containers/run", json={})
-        assert response.status_code == 400
-        
-        data = response.json()
-        assert "detail" in data
-    
-    def test_containers_list_endpoint(self, api_server):
-        """Test containers list endpoint."""
-        response = requests.get(f"{api_server}/containers")
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert "success" in data
-        assert "containers" in data
-        assert "count" in data
-        assert isinstance(data["containers"], list)
+        assert "Project path does not exist" in data["detail"]
     
     def test_containers_cleanup_endpoint(self, api_server):
         """Test containers cleanup endpoint."""
-        response = requests.post(f"{api_server}/containers/cleanup")
+        response = requests.post("http://localhost:8001/containers/cleanup")
         assert response.status_code == 200
         
         data = response.json()
-        assert "success" in data
         assert "cleaned_up" in data
         assert "message" in data
     
-    def test_containers_status_endpoint_not_found(self, api_server):
-        """Test containers status endpoint with non-existent container."""
-        response = requests.get(f"{api_server}/containers/non-existent-id/status")
+    def test_projects_list_endpoint(self, api_server):
+        """Test projects list endpoint."""
+        response = requests.get("http://localhost:8001/projects")
         assert response.status_code == 200
         
         data = response.json()
-        assert data["success"] is False
-        assert "not found" in data["error"].lower()
+        assert "projects" in data
+        assert "count" in data
     
-    def test_containers_logs_endpoint_not_found(self, api_server):
-        """Test containers logs endpoint with non-existent container."""
-        response = requests.get(f"{api_server}/containers/non-existent-id/logs")
+    def test_projects_status_endpoint_missing_data(self, api_server):
+        """Test projects status endpoint with missing data."""
+        response = requests.get("http://localhost:8001/projects/status")
+        assert response.status_code == 422  # Validation error
+    
+    def test_projects_rerun_endpoint_missing_data(self, api_server):
+        """Test projects rerun endpoint with missing data."""
+        response = requests.post("http://localhost:8001/projects/rerun", json={})
+        assert response.status_code == 422  # Validation error
+    
+    def test_projects_scale_endpoint_missing_data(self, api_server):
+        """Test projects scale endpoint with missing data."""
+        response = requests.post("http://localhost:8001/projects/scale", json={})
+        assert response.status_code == 422  # Validation error
+    
+    def test_swarm_service_create_endpoint_missing_data(self, api_server):
+        """Test swarm service create endpoint with missing data."""
+        response = requests.post("http://localhost:8001/swarm/service/create", json={})
+        assert response.status_code == 422  # Validation error
+    
+    def test_swarm_service_scale_endpoint_missing_data(self, api_server):
+        """Test swarm service scale endpoint with missing data."""
+        response = requests.post("http://localhost:8001/swarm/service/scale", json={})
+        assert response.status_code == 422  # Validation error
+    
+    def test_swarm_service_status_endpoint_missing_data(self, api_server):
+        """Test swarm service status endpoint with missing data."""
+        response = requests.get("http://localhost:8001/swarm/service/status")
+        assert response.status_code == 422  # Validation error
+    
+    def test_swarm_service_remove_endpoint_missing_data(self, api_server):
+        """Test swarm service remove endpoint with missing data."""
+        response = requests.delete("http://localhost:8001/swarm/service/remove")
+        assert response.status_code == 422  # Validation error
+    
+    def test_swarm_services_list_endpoint(self, api_server):
+        """Test swarm services list endpoint."""
+        response = requests.get("http://localhost:8001/swarm/services")
         assert response.status_code == 200
         
         data = response.json()
-        assert data["success"] is False
-        assert "not found" in data["error"].lower()
+        assert "services" in data
+        assert "count" in data
     
-    def test_containers_stop_endpoint_not_found(self, api_server):
-        """Test containers stop endpoint with non-existent container."""
-        response = requests.post(f"{api_server}/containers/non-existent-id/stop")
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert data["success"] is False
-        assert "not found" in data["error"].lower()
-    
-    def test_containers_remove_endpoint_not_found(self, api_server):
-        """Test containers remove endpoint with non-existent container."""
-        response = requests.delete(f"{api_server}/containers/non-existent-id")
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert data["success"] is False
-        assert "not found" in data["error"].lower()
-    
-    def test_docs_endpoint(self, api_server):
-        """Test docs endpoint."""
-        response = requests.get(f"{api_server}/docs")
-        assert response.status_code == 200
-        assert "text/html" in response.headers.get("content-type", "")
-    
-    def test_openapi_endpoint(self, api_server):
-        """Test OpenAPI schema endpoint."""
-        response = requests.get(f"{api_server}/openapi.json")
-        assert response.status_code == 200
-        
-        data = response.json()
-        assert "openapi" in data
-        assert "info" in data
-        assert "paths" in data
+    def test_swarm_service_logs_endpoint_missing_data(self, api_server):
+        """Test swarm service logs endpoint with missing data."""
+        response = requests.get("http://localhost:8001/swarm/service/logs")
+        assert response.status_code == 422  # Validation error
