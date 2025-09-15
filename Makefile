@@ -20,7 +20,6 @@ help:
 	@echo "  test-quick    - Run quick tests (no Docker/API)"
 	@echo "  lint          - Run linting"
 	@echo "  format        - Format code"
-	@echo "  backend       - Run backend server"
 	@echo "  client        - Install client in development mode"
 	@echo "  db-init       - Initialize database"
 	@echo "  db-clean      - Clean up database (remove all data)"
@@ -54,7 +53,7 @@ setup-all:
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Activate the environment: conda activate racer-dev"
-	@echo "  2. Start the backend: make backend"
+	@echo "  2. Start the backend: racerctl server start"
 	@echo "  3. In another terminal, test the CLI: racer --help"
 	@echo "  4. Try running a project: racer run --project-name test --path ./test-project"
 	@echo ""
@@ -123,10 +122,6 @@ format:
 	@echo "Formatting code..."
 	conda run -n racer-dev black src/
 
-# Run backend server
-backend:
-	@echo "Starting backend server..."
-	cd src/backend && conda run -n racer-dev uvicorn main:app --reload --host 0.0.0.0 --port 8001
 
 # Install client in development mode
 client:

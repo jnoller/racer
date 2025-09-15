@@ -79,11 +79,14 @@ make verify
 ### 3. Start the Backend Server
 
 ```bash
-# Start the API server
-make backend
+# Start the API server (background mode by default)
+racerctl server start
 
-# Or run directly
-cd src/backend && conda run -n racer python main.py
+# Start in foreground mode
+racerctl server start --foreground
+
+# Start on a specific port
+racerctl server start --port 8002
 ```
 
 ### 4. Test the Installation
@@ -289,8 +292,12 @@ make db-clean           # Clean up database (remove all data)
 make db-reset           # Reset database (drop and recreate)
 
 # Development
-make backend           # Run backend server
 make client            # Install client in development mode
+
+# Note: Backend server management is now handled by racerctl:
+# racerctl server start    # Start backend server
+# racerctl server stop     # Stop backend server
+# racerctl server status   # Check server status
 
 # Testing
 make test              # Run all tests
@@ -464,7 +471,7 @@ Racer automatically initializes Docker Swarm mode when needed:
 
 ```bash
 # Start the backend server
-make backend
+racerctl server start
 
 # In another terminal, run your project
 racer run --project-name "my-app" --path /path/to/your/conda-project --ports 8080:8000
@@ -720,11 +727,10 @@ racerctl --verbose containers list
 # Clone and setup
 git clone <repository-url>
 cd racer
-make setup
-make install-dev
+make setup-all
 
 # Start backend in development mode
-make backend
+racerctl server start
 
 # Run tests
 make test
