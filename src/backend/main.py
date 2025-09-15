@@ -90,7 +90,6 @@ class ContainerRunRequest(BaseModel):
     git_url: Optional[str] = None
     custom_commands: Optional[List[str]] = None
     app_port: Optional[int] = None
-    ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
 
@@ -100,7 +99,6 @@ class ContainerRunResponse(BaseModel):
     project_id: Optional[str] = None
     container_id: Optional[str] = None
     container_name: Optional[str] = None
-    ports: Optional[Dict[str, int]] = None
     message: str
     status: Optional[str] = None
 
@@ -144,7 +142,6 @@ class ProjectRerunRequest(BaseModel):
     project_id: Optional[str] = None
     project_name: Optional[str] = None
     custom_commands: Optional[List[str]] = None
-    ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
     no_rebuild: Optional[bool] = False
@@ -155,7 +152,6 @@ class ProjectRerunResponse(BaseModel):
     old_container_id: str
     new_container_id: Optional[str] = None
     new_container_name: Optional[str] = None
-    ports: Optional[Dict[str, int]] = None
     message: str
     status: Optional[str] = None
 
@@ -167,7 +163,6 @@ class ProjectScaleRequest(BaseModel):
     git_url: Optional[str] = None
     custom_commands: Optional[List[str]] = None
     app_port: Optional[int] = None
-    ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
 
@@ -507,9 +502,6 @@ async def run_container(request: ContainerRunRequest):
                 # Fallback to high port range
                 host_port = get_random_port(9000, 10000)
                 ports = {f"{request.app_port}/tcp": host_port}
-        elif request.ports:
-            # Use legacy port mappings
-            ports = request.ports
 
         # Run container
         run_result = container_manager.run_container(
@@ -1154,7 +1146,6 @@ async def rerun_project(request: ProjectRerunRequest):
         # Prepare run request with same configuration as original
         run_request_data = {
             "project_name": project_name,
-            "ports": request.ports or target_project.ports,
             "environment": request.environment,
             "command": request.command,
         }
@@ -1313,11 +1304,6 @@ async def scale_project(request: ProjectScaleRequest):
                 # Fallback to high port range
                 host_port = get_random_port(9000, 10000)
                 ports[f"{request.app_port}"] = host_port
-        elif request.ports:
-            # For swarm, we use the first port mapping as the published port
-            # All replicas will be accessible through the same port with load balancing
-            for container_port, host_port in request.ports.items():
-                ports[container_port] = host_port
         else:
             ports = {"8000": 8000}  # Default port
 

@@ -284,10 +284,6 @@ racer scale --project-name "my-app" --instances 3 --app-port 8000
 - Docker Swarm handles load balancing across all replicas
 - All replicas accessible via the same host port (8080)
 
-### **Legacy Port Management**
-
-For complex scenarios, the original `--ports` syntax is still supported:
-
 ### **Automatic Port Assignment**
 - **Backend API**: Uses port 8001 (configurable via `API_PORT` environment variable)
 - **User Services**: Automatically assigned random ports in range 8000-8999
@@ -296,7 +292,6 @@ For complex scenarios, the original `--ports` syntax is still supported:
 ### **Simplified Port Management**
 - **`racer run --app-port`**: Specify what port your app exposes (auto-assigns host port)
 - **`racer scale --app-port`**: Scale with automatic load balancing
-- **Legacy `--ports`**: Still supported for complex port mappings
 
 ### **Port Ranges**
 - **8000-8999**: User application services (auto-assigned)
@@ -306,11 +301,8 @@ For complex scenarios, the original `--ports` syntax is still supported:
 
 ### **Examples**
 ```bash
-# Simplified port management (recommended)
+# Simplified port management
 racer run --project-name my-app --path ./my-project --app-port 8000
-
-# Legacy port mappings (still supported)
-racer run --project-name my-app --path ./my-project --ports 3000:3000,8080:8080
 
 # Check what ports were assigned
 racer status --project-name my-app
@@ -588,7 +580,7 @@ racer swarm-remove --project-name my-app
 
 # Scale with custom configuration
 racer scale --project-name my-app --instances 2 --path ./my-project \
-  --ports 8001:8000 --environment DEBUG=true --command "python app.py"
+  --environment DEBUG=true --command "python app.py"
 ```
 
 **Scale Behavior:**
@@ -613,7 +605,7 @@ racer rerun --no-rebuild
 racer rerun --project-name my-app
 
 # Rerun with custom configuration and rebuilt image
-racer rerun --project-name my-app --app-port 8000 --environment DEBUG=true
+racer rerun --project-name my-app --environment DEBUG=true
 
 # Fast restart without rebuilding (for configuration changes only)
 racer rerun --project-name my-app --no-rebuild

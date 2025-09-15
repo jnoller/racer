@@ -45,7 +45,6 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
     help="Custom RUN commands to add to Dockerfile (comma-separated)",
 )
 @click.option("--app-port", type=int, help="Port that your application exposes (for load balancing)")
-@click.option("--ports", help="Port mappings (format: host:container,host:container) - legacy option")
 @click.option(
     "--env",
     "-e",
@@ -64,7 +63,6 @@ def run(
     git_url: str,
     custom_commands: str,
     app_port: int,
-    ports: str,
     environment: str,
     command: str,
     build_only: bool,
@@ -98,20 +96,10 @@ def run(
             request_data["custom_commands"] = [
                 cmd.strip() for cmd in custom_commands.split(",")
             ]
-        # Handle port configuration - prioritize --app-port over --ports
+        # Handle port configuration
         if app_port is not None:
             # Use --app-port for simplified load balancing
             request_data["app_port"] = app_port
-        elif ports:
-            # Parse legacy port mappings
-            port_mappings = {}
-            for port_mapping in ports.split(","):
-                if ":" in port_mapping:
-                    host_port, container_port = port_mapping.split(":")
-                    port_mappings[f"{container_port}/tcp"] = int(host_port)
-                else:
-                    port_mappings[f"{port_mapping}/tcp"] = int(port_mapping)
-            request_data["ports"] = port_mappings
         if environment:
             # Parse environment variables
             env_vars = {}
@@ -631,9 +619,6 @@ def list_projects(ctx, verbose: bool):
 )
 @click.option("--app-port", type=int, help="Port that your application exposes (for load balancing)")
 @click.option(
-    "--ports", "-P", help="Port mappings (format: host:container, e.g., 8080:8000) - legacy option"
-)
-@click.option(
     "--environment",
     "-e",
     help="Environment variables (format: KEY=VALUE, comma-separated)",
@@ -648,7 +633,6 @@ def scale(
     git_url: str,
     custom_commands: str,
     app_port: int,
-    ports: str,
     environment: str,
     command: str,
 ):
@@ -681,31 +665,10 @@ def scale(
                 cmd.strip() for cmd in custom_commands.split(",")
             ]
 
-        # Handle port configuration - prioritize --app-port over --ports
+        # Handle port configuration
         if app_port is not None:
             # Use --app-port for simplified load balancing
             request_data["app_port"] = app_port
-        elif ports:
-            # Parse legacy port mappings - for scale, we'll use a base port and increment
-            port_mappings = {}
-            port_list = [p.strip() for p in ports.split(",")]
-            if len(port_list) == 1 and ":" in port_list[0]:
-                # Single port mapping - we'll increment the host port for each instance
-                base_host_port, container_port = port_list[0].split(":", 1)
-                base_host_port = int(base_host_port)
-                container_port = container_port.strip()
-
-                # Create port mappings for each instance
-                for i in range(instances):
-                    host_port = base_host_port + i
-                    port_mappings[f"{host_port}/tcp"] = container_port
-            else:
-                # Multiple port mappings - use as provided
-                for port_mapping in port_list:
-                    if ":" in port_mapping:
-                        host_port, container_port = port_mapping.split(":", 1)
-                        port_mappings[host_port.strip()] = container_port.strip()
-            request_data["ports"] = port_mappings
 
         if environment:
             # Parse environment variables
@@ -1102,9 +1065,6 @@ def swarm_remove(ctx, project_name: str, force: bool):
     help="Custom RUN commands to add to Dockerfile (comma-separated)",
 )
 @click.option(
-    "--ports", "-P", help="Port mappings (format: host:container, e.g., 8080:8000)"
-)
-@click.option(
     "--environment",
     "-e",
     help="Environment variables (format: KEY=VALUE, comma-separated)",
@@ -1124,7 +1084,6 @@ def rerun(
     ctx,
     project_name: str,
     custom_commands: str,
-    ports: str,
     environment: str,
     command: str,
     no_rebuild: bool,
@@ -1211,16 +1170,6 @@ def rerun(
                             cmd.strip() for cmd in custom_commands.split(",")
                         ]
 
-                    if ports:
-                        # Parse port mappings
-                        port_mappings = {}
-                        for port_mapping in ports.split(","):
-                            if ":" in port_mapping:
-                                host_port, container_port = port_mapping.split(":", 1)
-                                port_mappings[
-                                    host_port.strip()
-                                ] = container_port.strip()
-                        request_data["ports"] = port_mappings
 
                     if environment:
                         # Parse environment variables
@@ -1276,14 +1225,6 @@ def rerun(
                     cmd.strip() for cmd in custom_commands.split(",")
                 ]
 
-            if ports:
-                # Parse port mappings
-                port_mappings = {}
-                for port_mapping in ports.split(","):
-                    if ":" in port_mapping:
-                        host_port, container_port = port_mapping.split(":", 1)
-                        port_mappings[host_port.strip()] = container_port.strip()
-                request_data["ports"] = port_mappings
 
             if environment:
                 # Parse environment variables
