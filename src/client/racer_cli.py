@@ -44,7 +44,8 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
     "-c",
     help="Custom RUN commands to add to Dockerfile (comma-separated)",
 )
-@click.option("--ports", help="Port mappings (format: host:container,host:container)")
+@click.option("--app-port", type=int, help="Port that your application exposes (for load balancing)")
+@click.option("--ports", help="Port mappings (format: host:container,host:container) - legacy option")
 @click.option(
     "--env",
     "-e",
@@ -62,6 +63,7 @@ def run(
     project_path: str,
     git_url: str,
     custom_commands: str,
+    app_port: int,
     ports: str,
     environment: str,
     command: str,
@@ -96,8 +98,12 @@ def run(
             request_data["custom_commands"] = [
                 cmd.strip() for cmd in custom_commands.split(",")
             ]
-        if ports:
-            # Parse port mappings
+        # Handle port configuration - prioritize --app-port over --ports
+        if app_port is not None:
+            # Use --app-port for simplified load balancing
+            request_data["app_port"] = app_port
+        elif ports:
+            # Parse legacy port mappings
             port_mappings = {}
             for port_mapping in ports.split(","):
                 if ":" in port_mapping:
@@ -623,8 +629,9 @@ def list_projects(ctx, verbose: bool):
     "-c",
     help="Custom RUN commands to add to Dockerfile (comma-separated)",
 )
+@click.option("--app-port", type=int, help="Port that your application exposes (for load balancing)")
 @click.option(
-    "--ports", "-P", help="Port mappings (format: host:container, e.g., 8080:8000)"
+    "--ports", "-P", help="Port mappings (format: host:container, e.g., 8080:8000) - legacy option"
 )
 @click.option(
     "--environment",
@@ -640,6 +647,7 @@ def scale(
     project_path: str,
     git_url: str,
     custom_commands: str,
+    app_port: int,
     ports: str,
     environment: str,
     command: str,
@@ -673,8 +681,12 @@ def scale(
                 cmd.strip() for cmd in custom_commands.split(",")
             ]
 
-        if ports:
-            # Parse port mappings - for scale, we'll use a base port and increment
+        # Handle port configuration - prioritize --app-port over --ports
+        if app_port is not None:
+            # Use --app-port for simplified load balancing
+            request_data["app_port"] = app_port
+        elif ports:
+            # Parse legacy port mappings - for scale, we'll use a base port and increment
             port_mappings = {}
             port_list = [p.strip() for p in ports.split(",")]
             if len(port_list) == 1 and ":" in port_list[0]:

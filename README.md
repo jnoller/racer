@@ -167,7 +167,7 @@ racer/
 
 ```bash
 # Run a conda-project in Docker
-racer run --project-name "my-app" --path /path/to/project --ports 8080:8000
+racer run --project-name "my-app" --path /path/to/project --app-port 8000
 
 # Validate a conda-project
 racer validate --path /path/to/project
@@ -188,7 +188,7 @@ racer status --list            # List all running projects
 # Scale a project to multiple instances (Docker Swarm)
 racer scale --project-name <name> --instances <n> --path <path>  # Scale local project
 racer scale --project-name <name> --instances <n> --git <url>    # Scale from git repo
-racer scale --project-name <name> --instances 3 --ports 8001:8000 # Scale with port mapping
+racer scale --project-name <name> --instances 3 --app-port 8000 # Scale with load balancing
 
 # Dynamic scaling with Docker Swarm
 racer scale-up --project-name <name> --instances <n>    # Scale up existing service
@@ -264,17 +264,39 @@ The backend provides a RESTful API at `http://localhost:8001`:
 
 ## Port Management
 
-Racer uses intelligent port management to avoid conflicts:
+Racer uses intelligent port management with simplified configuration for load balancing:
+
+### **Simplified Port Management (Recommended)**
+
+The new `--app-port` option makes load balancing effortless:
+
+```bash
+# Your app exposes port 8000 - we handle the rest!
+racer run --project-name "my-app" --path ./project --app-port 8000
+
+# Scale with automatic load balancing
+racer scale --project-name "my-app" --instances 3 --app-port 8000
+```
+
+**How it works:**
+- You specify what port your app exposes (`--app-port 8000`)
+- We auto-assign a host port (e.g., 8080) for load balancing
+- Docker Swarm handles load balancing across all replicas
+- All replicas accessible via the same host port (8080)
+
+### **Legacy Port Management**
+
+For complex scenarios, the original `--ports` syntax is still supported:
 
 ### **Automatic Port Assignment**
 - **Backend API**: Uses port 8001 (configurable via `API_PORT` environment variable)
 - **User Services**: Automatically assigned random ports in range 8000-8999
 - **Management Services**: Use port 8002 and higher
 
-### **When to Specify Ports**
-- **`racer run --ports`**: When your conda-project needs specific port mappings
-- **`racer scale --ports`**: When scaling services with port requirements
-- **`racer rerun --ports`**: When restarting with different port needs
+### **Simplified Port Management**
+- **`racer run --app-port`**: Specify what port your app exposes (auto-assigns host port)
+- **`racer scale --app-port`**: Scale with automatic load balancing
+- **Legacy `--ports`**: Still supported for complex port mappings
 
 ### **Port Ranges**
 - **8000-8999**: User application services (auto-assigned)
@@ -284,10 +306,10 @@ Racer uses intelligent port management to avoid conflicts:
 
 ### **Examples**
 ```bash
-# Auto-assign ports (recommended)
-racer run --project-name my-app --path ./my-project
+# Simplified port management (recommended)
+racer run --project-name my-app --path ./my-project --app-port 8000
 
-# Specify custom ports
+# Legacy port mappings (still supported)
 racer run --project-name my-app --path ./my-project --ports 3000:3000,8080:8080
 
 # Check what ports were assigned
@@ -491,13 +513,13 @@ Racer automatically initializes Docker Swarm mode when needed:
 racerctl server start
 
 # In another terminal, run your project
-racer run --project-name "my-app" --path /path/to/your/conda-project --ports 8080:8000
+racer run --project-name "my-app" --path /path/to/your/conda-project --app-port 8000
 ```
 
 ### 2. Deploy from Git Repository
 
 ```bash
-racer run --project-name "my-app" --git https://github.com/user/repo.git --ports 8080:8000
+racer run --project-name "my-app" --git https://github.com/user/repo.git --app-port 8000
 ```
 
 ### 3. Validate a Project
@@ -548,8 +570,8 @@ racer scale --project-name my-app --instances 3 --path ./my-project
 # Scale from git repository
 racer scale --project-name my-app --instances 5 --git https://github.com/user/repo
 
-# Scale with custom port mapping (built-in load balancing)
-racer scale --project-name my-app --instances 3 --ports 8001:8000
+# Scale with automatic load balancing
+racer scale --project-name my-app --instances 3 --app-port 8000
 
 # Dynamic scaling (scale up/down existing services)
 racer scale-up --project-name my-app --instances 5    # Scale to 5 replicas
@@ -591,7 +613,7 @@ racer rerun --no-rebuild
 racer rerun --project-name my-app
 
 # Rerun with custom configuration and rebuilt image
-racer rerun --project-name my-app --ports 8080:8000 --environment DEBUG=true
+racer rerun --project-name my-app --app-port 8000 --environment DEBUG=true
 
 # Fast restart without rebuilding (for configuration changes only)
 racer rerun --project-name my-app --no-rebuild

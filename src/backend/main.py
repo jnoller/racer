@@ -89,6 +89,7 @@ class ContainerRunRequest(BaseModel):
     project_path: Optional[str] = None
     git_url: Optional[str] = None
     custom_commands: Optional[List[str]] = None
+    app_port: Optional[int] = None
     ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
@@ -165,6 +166,7 @@ class ProjectScaleRequest(BaseModel):
     project_path: Optional[str] = None
     git_url: Optional[str] = None
     custom_commands: Optional[List[str]] = None
+    app_port: Optional[int] = None
     ports: Optional[Dict[str, int]] = None
     environment: Optional[Dict[str, str]] = None
     command: Optional[str] = None
@@ -493,10 +495,26 @@ async def run_container(request: ContainerRunRequest):
                 detail=f"Failed to build Docker image: {build_result['error']}",
             )
 
+        # Prepare ports for container
+        ports = None
+        if request.app_port is not None:
+            # Use app_port for simplified load balancing - auto-assign host port
+            from port_manager import get_random_port, get_service_port_range
+            try:
+                host_port = get_random_port(*get_service_port_range())
+                ports = {f"{request.app_port}/tcp": host_port}
+            except RuntimeError:
+                # Fallback to high port range
+                host_port = get_random_port(9000, 10000)
+                ports = {f"{request.app_port}/tcp": host_port}
+        elif request.ports:
+            # Use legacy port mappings
+            ports = request.ports
+
         # Run container
         run_result = container_manager.run_container(
             project_name=project_name,
-            ports=request.ports,
+            ports=ports,
             environment=request.environment,
             command=request.command,
         )
@@ -1285,7 +1303,17 @@ async def scale_project(request: ProjectScaleRequest):
 
         # Prepare ports for swarm service
         ports = {}
-        if request.ports:
+        if request.app_port is not None:
+            # Use app_port for simplified load balancing - auto-assign host port
+            from port_manager import get_random_port, get_service_port_range
+            try:
+                host_port = get_random_port(*get_service_port_range())
+                ports[f"{request.app_port}"] = host_port
+            except RuntimeError:
+                # Fallback to high port range
+                host_port = get_random_port(9000, 10000)
+                ports[f"{request.app_port}"] = host_port
+        elif request.ports:
             # For swarm, we use the first port mapping as the published port
             # All replicas will be accessible through the same port with load balancing
             for container_port, host_port in request.ports.items():
