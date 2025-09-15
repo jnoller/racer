@@ -107,7 +107,7 @@ racer/
 │       ├── api.py            # API client library
 │       ├── racer_cli.py      # User-facing CLI (racer)
 │       ├── cli.py            # Admin CLI (racerctl)
-│       └── setup.py          # Client installation
+│       └── pyproject.toml     # Client installation
 ├── tests/                    # Test suite
 │   ├── test_basic.py         # Basic functionality tests
 │   ├── test_integration_simple.py # Integration tests
