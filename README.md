@@ -187,6 +187,15 @@ racerctl liveness
 racerctl readiness
 racerctl info
 
+# Server management
+racerctl server start                    # Start backend server
+racerctl server start --background      # Start server in background
+racerctl server start --port 8002       # Start on specific port
+racerctl server stop                    # Stop backend server
+racerctl server stop --force            # Force stop server
+racerctl server status                  # Check server status
+racerctl server restart                 # Restart server
+
 # Container management
 racerctl containers list
 racerctl containers status <container_id>
@@ -198,7 +207,7 @@ racerctl containers cleanup
 
 ## API Endpoints
 
-The backend provides a RESTful API at `http://localhost:8000`:
+The backend provides a RESTful API at `http://localhost:8001`:
 
 ### Health & Status
 - `GET /` - API information
