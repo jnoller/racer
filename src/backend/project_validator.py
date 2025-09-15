@@ -7,8 +7,8 @@ import yaml
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
-from git import Repo, InvalidGitRepositoryError
+from typing import Dict, Any
+from git import Repo
 import subprocess
 
 
@@ -112,7 +112,7 @@ def clone_git_repository(git_url: str, target_dir: str = None) -> str:
             target_dir = tempfile.mkdtemp(prefix="racer_")
 
         # Clone the repository
-        repo = Repo.clone_from(git_url, target_dir)
+        Repo.clone_from(git_url, target_dir)
 
         return target_dir
 

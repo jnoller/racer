@@ -5,7 +5,7 @@ Database manager for the Racer backend.
 import os
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 

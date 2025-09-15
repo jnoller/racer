@@ -3,7 +3,6 @@ Database models for the Racer backend.
 """
 
 from datetime import datetime
-from typing import Optional
 from sqlalchemy import (
     Column,
     Integer,

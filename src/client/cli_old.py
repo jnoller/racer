@@ -5,7 +5,6 @@ Command-line interface for the Racer client.
 import click
 import json
 import os
-from typing import Optional
 from api import RacerAPIClient, RacerAPIError
 
 
@@ -162,7 +161,6 @@ def readiness(ctx):
                     click.echo("  Dependency checks:")
                     for check, status in checks.items():
                         status_icon = "✓" if status == "ok" else "✗"
-                        status_color = "green" if status == "ok" else "red"
                         click.echo(f"    {status_icon} {check}: {status}")
             else:
                 click.echo(click.style("✗ Server is not ready", fg="red"))

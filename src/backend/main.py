@@ -6,15 +6,11 @@ to Docker containers with a Heroku/Fly.io-like REST API.
 """
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 import uvicorn
 import os
-import tempfile
-import shutil
 from datetime import datetime
-from pathlib import Path
 
 # Import our custom modules
 from project_validator import (
@@ -459,7 +455,6 @@ async def run_container(request: ContainerRunRequest):
 
         # Generate Dockerfile
         dockerfile_path = os.path.join(project_path, "Dockerfile")
-        dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
         write_dockerfile(project_path, dockerfile_path, request.custom_commands)
 
         # Build Docker image
@@ -913,7 +908,6 @@ async def rerun_project(request: ProjectRerunRequest):
             )
 
         old_container_id = target_project.container_id
-        old_container_name = target_project.container_name
 
         # Stop the existing container
         try:
@@ -940,17 +934,15 @@ async def rerun_project(request: ProjectRerunRequest):
         # This is a simplified approach - in a real implementation, you might store
         # the original project path/git URL in container labels or metadata
         project_path = None
-        git_url = None
 
         # Check if we can find the project by name in common locations
         import os
-        from pathlib import Path
 
         # Look for project in current directory and common locations
         possible_paths = [
             f"./{project_name}",
-            f"./test-project",  # fallback for test projects
-            f"/Users/jesse/Code/pws/racer/test-project",  # specific test path
+            "./test-project",  # fallback for test projects
+            "/Users/jesse/Code/pws/racer/test-project",  # specific test path
         ]
 
         for path in possible_paths:
@@ -962,7 +954,10 @@ async def rerun_project(request: ProjectRerunRequest):
             return ProjectRerunResponse(
                 success=False,
                 old_container_id=old_container_id,
-                message=f"Could not locate project source for '{project_name}'. Please specify project path or git URL.",
+                message=(
+                    f"Could not locate project source for '{project_name}'. "
+                    f"Please specify project path or git URL."
+                ),
             )
 
         # Prepare run request with same configuration as original
@@ -976,11 +971,6 @@ async def rerun_project(request: ProjectRerunRequest):
         # Rebuild the Docker image with updated source files (unless no_rebuild is True)
         if not request.no_rebuild:
             try:
-                # First, generate a new Dockerfile
-                dockerfile_response = generate_dockerfile(
-                    project_path=project_path, custom_commands=request.custom_commands
-                )
-
                 # Write the Dockerfile
                 dockerfile_path = write_dockerfile(
                     project_path, custom_commands=request.custom_commands
@@ -1084,14 +1074,8 @@ async def scale_project(request: ProjectScaleRequest):
 
         # Generate Dockerfile first
         if project_path:
-            dockerfile_response = generate_dockerfile(
-                project_path=project_path, custom_commands=request.custom_commands
-            )
-
             # Write Dockerfile
-            dockerfile_path = write_dockerfile(
-                project_path, custom_commands=request.custom_commands
-            )
+            write_dockerfile(project_path, custom_commands=request.custom_commands)
 
         # Generate Docker Compose file
         compose_content = generate_compose_file(

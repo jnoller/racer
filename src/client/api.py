@@ -4,7 +4,7 @@ API client for communicating with the Racer backend server.
 
 import requests
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from urllib.parse import urljoin
 
 

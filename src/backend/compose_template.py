@@ -4,7 +4,7 @@ Docker Compose template generator for conda-project deployments.
 
 import os
 import yaml
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
 
 def generate_compose_file(
@@ -292,9 +292,7 @@ def generate_nginx_config(project_name: str, instances: int) -> str:
         # Docker Compose creates containers with pattern: {project_name}_{instance_number}
         upstream_servers.append(f"    server {project_name}_{i+1}:8000;")
 
-    upstream_block = "\n".join(upstream_servers)
-
-    nginx_config = f"""events {{
+    nginx_config = """events {
     worker_connections 1024;
 }}
 

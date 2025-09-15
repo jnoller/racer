@@ -5,9 +5,8 @@ Docker container management for conda-project deployments.
 import docker
 import os
 import time
-import json
 import uuid
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from datetime import datetime
 import threading
 import queue
@@ -49,10 +48,9 @@ class ContainerManager:
         """
         try:
             # Generate Dockerfile if it doesn't exist
-            from dockerfile_template import generate_dockerfile, write_dockerfile
+            from dockerfile_template import write_dockerfile
 
             if not os.path.exists(dockerfile_path):
-                dockerfile_content = generate_dockerfile(project_path, custom_commands)
                 write_dockerfile(project_path, dockerfile_path, custom_commands)
 
             # Build the image using Docker SDK

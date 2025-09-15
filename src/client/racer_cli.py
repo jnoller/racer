@@ -4,8 +4,6 @@ Racer CLI - User-facing commands for running conda-projects.
 
 import click
 import json
-import os
-from typing import Optional
 from api import RacerAPIClient, RacerAPIError
 
 
@@ -546,7 +544,6 @@ def list_projects(ctx, verbose: bool):
 
         if projects_response.get("success"):
             projects = projects_response.get("projects", [])
-            message = projects_response.get("message", "")
 
             if verbose:
                 click.echo("Projects response:")
@@ -1009,9 +1006,8 @@ def scale(
                 created_instances = response.get("created_instances", 0)
                 requested_instances = response.get("requested_instances", 0)
                 containers = response.get("containers", [])
-                message = response.get("message", "")
 
-                click.echo(click.style(f"✓ Project scaling successful", fg="green"))
+                click.echo(click.style("✓ Project scaling successful", fg="green"))
                 click.echo(f"Project: {project_name}")
                 click.echo(
                     f"Created: {created_instances}/{requested_instances} instances"
@@ -1031,6 +1027,7 @@ def scale(
                             click.echo(f"    Ports: {container_ports}")
                         click.echo()
 
+                message = response.get("message", "")
                 if message:
                     click.echo(f"Message: {message}")
             else:

@@ -5,7 +5,6 @@ RacerCTL - Admin CLI for the Racer deployment system.
 import click
 import json
 import os
-from typing import Optional
 from .api import RacerAPIClient, RacerAPIError
 
 
@@ -162,7 +161,6 @@ def readiness(ctx):
                     click.echo("  Dependency checks:")
                     for check, status in checks.items():
                         status_icon = "✓" if status == "ok" else "✗"
-                        status_color = "green" if status == "ok" else "red"
                         click.echo(f"    {status_icon} {check}: {status}")
             else:
                 click.echo(click.style("✗ Server is not ready", fg="red"))
@@ -323,7 +321,7 @@ def container_status(ctx, container_id: str):
                 status_color = (
                     "green" if response.get("status") == "running" else "yellow"
                 )
-                click.echo(click.style(f"✓ Container Status", fg=status_color))
+                click.echo(click.style("✓ Container Status", fg=status_color))
                 click.echo(f"Name: {response.get('container_name', 'unknown')}")
                 click.echo(f"ID: {response.get('container_id', 'unknown')}")
                 click.echo(f"Status: {response.get('status', 'unknown')}")
