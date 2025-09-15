@@ -212,6 +212,38 @@ The backend provides a RESTful API at `http://localhost:8000`:
 - `DELETE /containers/{id}` - Remove container
 - `POST /containers/cleanup` - Cleanup stopped containers
 
+## Port Management
+
+Racer uses intelligent port management to avoid conflicts:
+
+### **Automatic Port Assignment**
+- **Backend API**: Uses port 8001 (configurable via `API_PORT` environment variable)
+- **User Services**: Automatically assigned random ports in range 8000-8999
+- **Management Services**: Use port 8002 and higher
+
+### **When to Specify Ports**
+- **`racer run --ports`**: When your conda-project needs specific port mappings
+- **`racer scale --ports`**: When scaling services with port requirements
+- **`racer rerun --ports`**: When restarting with different port needs
+
+### **Port Ranges**
+- **8000-8999**: User application services (auto-assigned)
+- **8001**: Racer API backend (default)
+- **8002+**: Management and internal services
+- **9000+**: Fallback range if service ports are full
+
+### **Examples**
+```bash
+# Auto-assign ports (recommended)
+racer run --project-name my-app --path ./my-project
+
+# Specify custom ports
+racer run --project-name my-app --path ./my-project --ports 3000:3000,8080:8080
+
+# Check what ports were assigned
+racer status --project-name my-app
+```
+
 ## Makefile Commands
 
 The project includes a comprehensive Makefile for development:

@@ -10,6 +10,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 import threading
 import queue
+from port_manager import get_random_port, get_service_port_range
 
 
 class ContainerManager:
@@ -97,9 +98,16 @@ class ContainerManager:
             Dictionary with container run results
         """
         try:
-            # Default port mapping
+            # Default port mapping - use random available port
             if ports is None:
-                ports = {"8000/tcp": 8000}
+                # Try to find an available port in the service range
+                try:
+                    service_port = get_random_port(*get_service_port_range())
+                    ports = {f"{service_port}/tcp": service_port}
+                except RuntimeError:
+                    # Fallback to a high port if service range is full
+                    service_port = get_random_port(9000, 10000)
+                    ports = {f"{service_port}/tcp": service_port}
 
             # Default environment
             if environment is None:

@@ -8,7 +8,7 @@ from api import RacerAPIClient, RacerAPIError
 
 
 @click.group()
-@click.option("--api-url", default="http://localhost:8000", help="Racer API server URL")
+@click.option("--api-url", default="http://localhost:8001", help="Racer API server URL")
 @click.option("--timeout", default=30, type=int, help="Request timeout in seconds")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose output")
 @click.pass_context

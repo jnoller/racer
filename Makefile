@@ -91,7 +91,7 @@ format:
 # Run backend server
 backend:
 	@echo "Starting backend server..."
-	cd src/backend && conda run -n racer-dev uvicorn main:app --reload --host 0.0.0.0 --port 8000
+	cd src/backend && conda run -n racer-dev uvicorn main:app --reload --host 0.0.0.0 --port 8001
 
 # Install client in development mode
 client:

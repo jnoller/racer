@@ -19,7 +19,7 @@ class RacerAPIClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000",
+        base_url: str = "http://localhost:8001",
         timeout: int = 30,
         verbose: bool = False,
     ):
