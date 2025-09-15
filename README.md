@@ -42,7 +42,7 @@ Get up and running with Racer in under 2 minutes:
 
 ```bash
 # 1. Clone and setup everything
-git clone <repository-url>
+git clone git@github.com:jnoller/racer.git
 cd racer
 make setup-all
 
@@ -65,7 +65,7 @@ racer status --project-name "my-app"
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone git@github.com:jnoller/racer.git
 cd racer
 ```
 
@@ -666,20 +666,6 @@ export RACER_API_TIMEOUT=30
 
 # Docker Configuration
 export DOCKER_HOST=unix:///var/run/docker.sock
-```
-
-### Backend Configuration
-
-Create a `.env` file in the `src/backend` directory:
-
-```bash
-# API configuration
-API_HOST=0.0.0.0
-API_PORT=8000
-DEBUG=True
-
-# Docker configuration
-DOCKER_HOST=unix:///var/run/docker.sock
 ```
 
 ## Dependencies
