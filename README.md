@@ -188,13 +188,16 @@ racerctl readiness
 racerctl info
 
 # Server management
-racerctl server start                    # Start backend server
-racerctl server start --background      # Start server in background
+racerctl server start                    # Start backend server (background by default)
+racerctl server start --foreground      # Start server in foreground
 racerctl server start --port 8002       # Start on specific port
 racerctl server stop                    # Stop backend server
 racerctl server stop --force            # Force stop server
 racerctl server status                  # Check server status
-racerctl server restart                 # Restart server
+racerctl server restart                 # Restart server (background by default)
+
+# Note: Server commands default to background mode for convenience.
+# Use --foreground flag to run in foreground when needed.
 
 # Container management
 racerctl containers list

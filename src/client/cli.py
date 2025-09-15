@@ -232,15 +232,16 @@ def server():
 @click.option("--port", "-p", default=8001, help="Port to run the server on")
 @click.option("--host", default="0.0.0.0", help="Host to bind the server to")
 @click.option("--reload", is_flag=True, default=True, help="Enable auto-reload for development")
-@click.option("--background", "-b", is_flag=True, help="Run server in background")
+@click.option("--foreground", "-f", is_flag=True, help="Run server in foreground (default is background)")
 @click.option("--env", default="racer-dev", help="Conda environment to use")
 @click.pass_context
-def start_server(ctx, port: int, host: str, reload: bool, background: bool, env: str):
+def start_server(ctx, port: int, host: str, reload: bool, foreground: bool, env: str):
     """
     Start the Racer backend server.
     
     This command starts the FastAPI backend server using uvicorn.
-    By default, it runs in development mode with auto-reload enabled.
+    By default, it runs in background mode with auto-reload enabled.
+    Use --foreground to run in the foreground.
     """
     verbose = ctx.obj["verbose"]
     
@@ -267,7 +268,7 @@ def start_server(ctx, port: int, host: str, reload: bool, background: bool, env:
         click.echo(f"Starting server with command: {' '.join(cmd)}")
     
     try:
-        if background:
+        if not foreground:  # Default to background mode
             # Run in background
             process = subprocess.Popen(
                 cmd,
@@ -376,13 +377,15 @@ def server_status(ctx, port: int):
 @click.option("--port", "-p", default=8001, help="Port of the server to restart")
 @click.option("--host", default="0.0.0.0", help="Host to bind the server to")
 @click.option("--reload", is_flag=True, default=True, help="Enable auto-reload for development")
+@click.option("--foreground", "-f", is_flag=True, help="Run server in foreground (default is background)")
 @click.option("--env", default="racer-dev", help="Conda environment to use")
 @click.pass_context
-def restart_server(ctx, port: int, host: str, reload: bool, env: str):
+def restart_server(ctx, port: int, host: str, reload: bool, foreground: bool, env: str):
     """
     Restart the Racer backend server.
     
     This command stops the current server and starts a new one.
+    By default, restarts in background mode.
     """
     click.echo(click.style("Restarting server...", fg="blue"))
     
@@ -394,7 +397,7 @@ def restart_server(ctx, port: int, host: str, reload: bool, env: str):
     
     # Start the server
     click.echo("Starting new server...")
-    ctx.invoke(start_server, port=port, host=host, reload=reload, background=True, env=env)
+    ctx.invoke(start_server, port=port, host=host, reload=reload, foreground=foreground, env=env)
 
 
 def is_server_running(port: int) -> bool:
