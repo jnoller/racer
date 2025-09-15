@@ -15,6 +15,8 @@
 - 🐳 **Docker integration** with automatic image building and container management
 - 📦 **Conda-project support** with validation and environment management
 - 🆔 **Auto-generated project IDs** with user-friendly project names for easy management
+- 🔍 **Enhanced status monitoring** with flexible project identification (name, ID, container ID)
+- 🧠 **Smart project name extraction** from container naming patterns
 - 🔧 **Dual CLI interface** for users and administrators
 - 🌐 **RESTful API** with health, validation, and container management endpoints
 - 📈 **Horizontal scaling** with Docker Compose for multiple instances
@@ -136,7 +138,9 @@ racer list-projects            # List all running projects
 
 # Check project status
 racer status                   # Check status of running projects
+racer status --project-name <name> # Check specific project by name
 racer status --project-id <id> # Check specific project by ID
+racer status --container-id <id> # Check specific container by ID
 racer status --list            # List all running projects
 
 # Scale a project to multiple instances
@@ -305,6 +309,42 @@ racer rerun --project-id "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 - **Flexible Management**: Choose the identifier that works best for your workflow
 - **Persistent Tracking**: Project state survives backend restarts
 
+## Enhanced Status Command
+
+The `racer status` command provides comprehensive project monitoring with multiple identification methods:
+
+### Flexible Project Identification
+
+```bash
+# Reference by project name (extracted from container names)
+racer status --project-name "my-app"
+
+# Reference by project ID (auto-generated UUID)
+racer status --project-id "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+# Reference by container ID (Docker container identifier)
+racer status --container-id "73a0004b3b23"
+
+# List all running projects
+racer status --list
+```
+
+### Smart Project Name Extraction
+
+The system automatically extracts project names from container naming patterns:
+- `my-app-1757951390-bad5ce96` → `my-app`
+- `test-project-debug-test-1` → `debug-test`
+- `final-scale-test_1` → `final-scale-test`
+
+### Comprehensive Status Information
+
+Status checks provide detailed information including:
+- Container health and runtime status
+- Port mappings and network configuration
+- Application accessibility and health checks
+- Start time and image information
+- Support for both single containers and scaled instances
+
 ## Usage Examples
 
 ### 1. Deploy a Local Project
@@ -349,8 +389,14 @@ racer list-projects
 # Check status of running projects
 racer status
 
-# Check specific project status
+# Check specific project status by name
+racer status --project-name "my-app"
+
+# Check specific project status by ID
 racer status --project-id <project_id>
+
+# Check specific container status by ID
+racer status --container-id <container_id>
 
 # List projects with status command
 racer status --list
@@ -597,5 +643,9 @@ mypy src/
 - **SQLite database integration** for persistent state tracking
 - **Database management commands** (db-init, db-clean, db-reset)
 - **State persistence** across backend restarts
+- **Enhanced status command** with flexible project identification
+- **Smart project name extraction** from container naming patterns
+- **Container ID support** for direct container status checks
+- **Docker Compose container status** integration
 - Comprehensive testing infrastructure
 - Development automation with Makefile
