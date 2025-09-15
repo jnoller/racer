@@ -657,16 +657,13 @@ make test-coverage
 
 ## Configuration
 
-### Environment Variables
+The system uses minimal configuration with sensible defaults:
 
-```bash
-# API Configuration
-export RACER_API_URL=http://localhost:8000
-export RACER_API_TIMEOUT=30
+- **Backend**: Runs on `http://localhost:8001` by default
+- **Client**: Connects to `http://localhost:8001` by default
+- **Port Management**: Automatically assigns available ports for user projects
 
-# Docker Configuration
-export DOCKER_HOST=unix:///var/run/docker.sock
-```
+All configuration can be overridden via command-line options or environment variables as needed.
 
 ## Dependencies
 
