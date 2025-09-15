@@ -28,7 +28,15 @@
 - 📊 **Coverage reporting** and automated testing
 - ⚡ **Fast development** with hot-reload and development tools
 
-## Quickstart
+## Prerequisites
+
+Before getting started, ensure you have the following installed on your system:
+
+- [Conda](https://docs.conda.io/en/latest/miniconda.html) (Miniconda or Anaconda)
+- [Docker](https://docs.docker.com/get-docker/) (for container management)
+- [Git](https://git-scm.com/downloads) (for version control)
+
+## Quick Start
 
 Get up and running with Racer in under 2 minutes:
 
@@ -48,19 +56,11 @@ racer run --project-name "my-app" --path /path/to/your/conda-project
 racer status --project-name "my-app"
 ```
 
-**That's it!** Your conda-project is now running in a Docker container. 
+**That's it!** Your conda-project is now running in a Docker container.
 
-For more details, see the [Quick Start](#quick-start) section below.
+---
 
-## Prerequisites
-
-Before getting started, ensure you have the following installed on your system:
-
-- [Conda](https://docs.conda.io/en/latest/miniconda.html) (Miniconda or Anaconda)
-- [Docker](https://docs.docker.com/get-docker/) (for container management)
-- [Git](https://git-scm.com/downloads) (for version control)
-
-## Quick Start
+### Detailed Setup Instructions
 
 ### 1. Clone the Repository
 
