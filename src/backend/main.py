@@ -22,6 +22,7 @@ from project_validator import (
 from dockerfile_template import generate_dockerfile, write_dockerfile
 from docker_manager import ContainerManager
 from compose_template import generate_compose_file, write_compose_file
+from swarm_manager import SwarmManager
 
 try:
     from .database import DatabaseManager
@@ -228,6 +229,13 @@ try:
 except Exception as e:
     print(f"Warning: Failed to initialize Docker container manager: {e}")
     container_manager = None
+
+# Initialize swarm manager
+try:
+    swarm_manager = SwarmManager(db_manager=db_manager)
+except Exception as e:
+    print(f"Warning: Failed to initialize Docker Swarm manager: {e}")
+    swarm_manager = None
 
 
 @app.get("/", response_model=Dict[str, str])
@@ -671,7 +679,7 @@ async def cleanup_containers():
 async def list_projects():
     """
     List all running projects with user-friendly information.
-    Includes both tracked containers and Docker Compose managed containers.
+    Includes tracked containers, Docker Compose managed containers, and Docker Swarm services.
     """
     try:
         projects = []
@@ -812,6 +820,39 @@ async def list_projects():
             # If Docker Compose container detection fails, continue with tracked containers only
             print(f"Warning: Could not detect Docker Compose containers: {e}")
 
+        # 3. Get Docker Swarm services
+        if swarm_manager:
+            try:
+                swarm_services_response = swarm_manager.list_services()
+                if swarm_services_response["success"]:
+                    swarm_services = swarm_services_response.get("services", [])
+                    for service in swarm_services:
+                        service_name = service.get("service_name", "")
+                        service_id = service.get("service_id", "")
+                        
+                        # Check if this service is already in our projects list
+                        already_tracked = any(
+                            p.container_id == service_id or p.project_name == service_name 
+                            for p in projects
+                        )
+                        
+                        if not already_tracked:
+                            # Create project info for swarm service
+                            project_info = ProjectInfo(
+                                project_id=service_id[:12] if service_id else "unknown",
+                                project_name=service_name,
+                                container_id=service_id,
+                                container_name=service_name,  # Swarm services don't have individual container names
+                                status=service.get("status", "unknown"),
+                                ports=service.get("ports", {}),
+                                started_at=service.get("created_at", ""),
+                                image=service.get("image", "unknown"),
+                            )
+                            projects.append(project_info)
+                            
+            except Exception as e:
+                print(f"Warning: Could not detect Docker Swarm services: {e}")
+
         return ProjectsListResponse(
             success=True,
             projects=projects,
@@ -899,8 +940,31 @@ async def get_project_status(request: ProjectStatusRequest):
             )
 
         container_id = target_project.container_id
+        project_name = target_project.project_name
 
-        # Get container status
+        # Check if this is a swarm service first
+        if swarm_manager:
+            try:
+                swarm_status = swarm_manager.get_service_status(project_name)
+                if swarm_status["success"]:
+                    # This is a swarm service
+                    return ProjectStatusResponse(
+                        success=True,
+                        container_id=swarm_status["service_id"],
+                        container_name=swarm_status["service_name"],
+                        container_status=swarm_status["status"],
+                        app_health=None,  # TODO: Add health check for swarm services
+                        app_accessible=swarm_status["status"] == "running",
+                        ports=swarm_status["ports"],
+                        started_at=swarm_status["created_at"],
+                        image=swarm_status["image"],
+                        message=f"Swarm service status: {swarm_status['running_replicas']}/{swarm_status['replicas']} replicas running",
+                    )
+            except Exception:
+                # If swarm service lookup fails, continue with container lookup
+                pass
+
+        # Get container status (for individual containers)
         container_status = container_manager.get_container_status(container_id)
         if not container_status["success"]:
             return ProjectStatusResponse(
@@ -1224,7 +1288,7 @@ async def rerun_project(request: ProjectRerunRequest):
 @app.post("/project/scale", response_model=ProjectScaleResponse)
 async def scale_project(request: ProjectScaleRequest):
     """
-    Scale a project to run multiple instances using Docker Compose.
+    Scale a project to run multiple instances using Docker Swarm.
     """
     try:
         project_name = request.project_name
@@ -1240,6 +1304,17 @@ async def scale_project(request: ProjectScaleRequest):
                 created_instances=0,
                 containers=[],
                 message="Either project_path or git_url must be specified",
+            )
+
+        # Check if swarm manager is available
+        if not swarm_manager:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message="Docker Swarm manager not available",
             )
 
         # Validate project if path is provided
@@ -1263,113 +1338,306 @@ async def scale_project(request: ProjectScaleRequest):
             # Write Dockerfile
             write_dockerfile(project_path, custom_commands=request.custom_commands)
 
-        # Generate Docker Compose file
-        compose_content = generate_compose_file(
+        # Build Docker image
+        image_name = f"{project_name}:latest"
+        build_result = container_manager.build_image(
             project_name=project_name,
             project_path=project_path or ".",
-            instances=instances,
-            ports=request.ports,
-            environment=request.environment,
-            command=request.command,
             custom_commands=request.custom_commands,
-            use_load_balancer=False,  # Use port range instead of load balancer
         )
 
-        # Write Docker Compose file
-        compose_file_path = write_compose_file(project_path or ".", compose_content)
-
-        # Use Docker Compose to scale the service
-        import subprocess
-        import os
-
-        # Change to project directory
-        original_cwd = os.getcwd()
-        os.chdir(project_path or ".")
-
-        try:
-            # Stop any existing services
-            subprocess.run(["docker-compose", "down"], capture_output=True, text=True)
-
-            # Build and start all services
-            scale_cmd = ["docker-compose", "up", "-d", "--build"]
-            result = subprocess.run(scale_cmd, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                return ProjectScaleResponse(
-                    success=False,
-                    project_name=project_name,
-                    requested_instances=instances,
-                    created_instances=0,
-                    containers=[],
-                    compose_file=compose_file_path,
-                    message=f"Docker Compose failed: {result.stderr}",
-                )
-
-            # Get running containers
-            ps_result = subprocess.run(
-                ["docker-compose", "ps", "--format", "json"],
-                capture_output=True,
-                text=True,
-            )
-
-            created_containers = []
-            if ps_result.returncode == 0:
-                import json
-
-                try:
-                    # Parse each line as a separate JSON object
-                    containers_data = []
-                    for line in ps_result.stdout.strip().split('\n'):
-                        if line.strip():
-                            containers_data.append(json.loads(line))
-                    
-                    for i, container in enumerate(containers_data):
-                        if container.get("State") == "running":
-                            container_info = {
-                                "container_id": container.get("ID", "")[:12],
-                                "container_name": container.get("Name", ""),
-                                "ports": request.ports or {"8000": 8000},
-                                "status": container.get("State", "unknown"),
-                                "instance": i + 1,
-                            }
-                            created_containers.append(container_info)
-                except json.JSONDecodeError:
-                    # Fallback if JSON parsing fails
-                    created_containers = [
-                        {
-                            "container_id": "unknown",
-                            "container_name": f"{project_name}_{i+1}",
-                            "ports": request.ports or {"8000": 8000},
-                            "status": "running",
-                            "instance": i + 1,
-                        }
-                        for i in range(instances)
-                    ]
-
-            # Note: Container tracking for scaled projects is handled by the list_projects endpoint
-            # which checks both tracked containers and Docker Compose managed containers
-
-            # Prepare response
-            success = len(created_containers) > 0
-            message = f"Successfully scaled {project_name} to {len(created_containers)} instance(s) using Docker Compose"
-
+        if not build_result["success"]:
             return ProjectScaleResponse(
-                success=success,
+                success=False,
                 project_name=project_name,
                 requested_instances=instances,
-                created_instances=len(created_containers),
-                containers=created_containers,
-                compose_file=compose_file_path,
-                message=message,
+                created_instances=0,
+                containers=[],
+                message=f"Failed to build image: {build_result.get('error', 'Unknown error')}",
             )
 
-        finally:
-            # Restore original working directory
-            os.chdir(original_cwd)
+        # Prepare ports for swarm service
+        ports = {}
+        if request.ports:
+            # For swarm, we use the first port mapping as the published port
+            # All replicas will be accessible through the same port with load balancing
+            for container_port, host_port in request.ports.items():
+                ports[container_port] = host_port
+        else:
+            ports = {"8000": 8000}  # Default port
+
+        # Prepare environment variables
+        environment = request.environment or {}
+
+        # Prepare command
+        command = request.command or ["conda", "project", "run"]
+
+        # Create or update swarm service
+        service_result = swarm_manager.create_service(
+            service_name=project_name,
+            image=image_name,
+            replicas=instances,
+            ports=ports,
+            environment=environment,
+            command=command
+        )
+
+        if not service_result["success"]:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message=f"Failed to create swarm service: {service_result.get('error', 'Unknown error')}",
+            )
+
+        # Get service status to verify it's running
+        service_status = swarm_manager.get_service_status(project_name)
+        
+        created_containers = []
+        if service_status["success"]:
+            # Create container info for each replica
+            for i in range(instances):
+                container_info = {
+                    "container_id": f"{service_status['service_id'][:12]}_{i+1}",
+                    "container_name": f"{project_name}_{i+1}",
+                    "ports": ports,
+                    "status": service_status["status"],
+                    "instance": i + 1,
+                }
+                created_containers.append(container_info)
+
+        # Prepare response
+        success = service_result["success"] and len(created_containers) > 0
+        message = f"Successfully scaled {project_name} to {instances} instance(s) using Docker Swarm"
+
+        return ProjectScaleResponse(
+            success=success,
+            project_name=project_name,
+            requested_instances=instances,
+            created_instances=len(created_containers),
+            containers=created_containers,
+            compose_file=None,  # Not used for swarm
+            message=message,
+        )
 
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to scale project: {str(e)}"
+        )
+
+
+@app.post("/project/scale-up", response_model=ProjectScaleResponse)
+async def scale_up_project(request: ProjectScaleRequest):
+    """
+    Scale up an existing project to more instances using Docker Swarm.
+    """
+    try:
+        project_name = request.project_name
+        instances = request.instances
+
+        if not swarm_manager:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message="Docker Swarm manager not available",
+            )
+
+        # Scale the existing service
+        scale_result = swarm_manager.scale_service(project_name, instances)
+
+        if not scale_result["success"]:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message=f"Failed to scale service: {scale_result.get('error', 'Unknown error')}",
+            )
+
+        # Get updated service status
+        service_status = swarm_manager.get_service_status(project_name)
+        
+        created_containers = []
+        if service_status["success"]:
+            # Create container info for each replica
+            for i in range(instances):
+                container_info = {
+                    "container_id": f"{service_status['service_id'][:12]}_{i+1}",
+                    "container_name": f"{project_name}_{i+1}",
+                    "ports": service_status.get("ports", {}),
+                    "status": service_status["status"],
+                    "instance": i + 1,
+                }
+                created_containers.append(container_info)
+
+        return ProjectScaleResponse(
+            success=True,
+            project_name=project_name,
+            requested_instances=instances,
+            created_instances=len(created_containers),
+            containers=created_containers,
+            compose_file=None,
+            message=f"Successfully scaled {project_name} to {instances} instances",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to scale up project: {str(e)}"
+        )
+
+
+@app.post("/project/scale-down", response_model=ProjectScaleResponse)
+async def scale_down_project(request: ProjectScaleRequest):
+    """
+    Scale down an existing project to fewer instances using Docker Swarm.
+    """
+    try:
+        project_name = request.project_name
+        instances = request.instances
+
+        if not swarm_manager:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message="Docker Swarm manager not available",
+            )
+
+        # Scale the existing service
+        scale_result = swarm_manager.scale_service(project_name, instances)
+
+        if not scale_result["success"]:
+            return ProjectScaleResponse(
+                success=False,
+                project_name=project_name,
+                requested_instances=instances,
+                created_instances=0,
+                containers=[],
+                message=f"Failed to scale service: {scale_result.get('error', 'Unknown error')}",
+            )
+
+        # Get updated service status
+        service_status = swarm_manager.get_service_status(project_name)
+        
+        created_containers = []
+        if service_status["success"]:
+            # Create container info for each replica
+            for i in range(instances):
+                container_info = {
+                    "container_id": f"{service_status['service_id'][:12]}_{i+1}",
+                    "container_name": f"{project_name}_{i+1}",
+                    "ports": service_status.get("ports", {}),
+                    "status": service_status["status"],
+                    "instance": i + 1,
+                }
+                created_containers.append(container_info)
+
+        return ProjectScaleResponse(
+            success=True,
+            project_name=project_name,
+            requested_instances=instances,
+            created_instances=len(created_containers),
+            containers=created_containers,
+            compose_file=None,
+            message=f"Successfully scaled {project_name} down to {instances} instances",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to scale down project: {str(e)}"
+        )
+
+
+@app.get("/swarm/services", response_model=Dict[str, Any])
+async def list_swarm_services():
+    """
+    List all Docker Swarm services.
+    """
+    try:
+        if not swarm_manager:
+            return {
+                "success": False,
+                "services": [],
+                "message": "Docker Swarm manager not available"
+            }
+
+        result = swarm_manager.list_services()
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list swarm services: {str(e)}"
+        )
+
+
+@app.get("/swarm/service/{service_name}/status", response_model=Dict[str, Any])
+async def get_swarm_service_status(service_name: str):
+    """
+    Get the status of a specific Docker Swarm service.
+    """
+    try:
+        if not swarm_manager:
+            return {
+                "success": False,
+                "message": "Docker Swarm manager not available"
+            }
+
+        result = swarm_manager.get_service_status(service_name)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get service status: {str(e)}"
+        )
+
+
+@app.get("/swarm/service/{service_name}/logs", response_model=Dict[str, Any])
+async def get_swarm_service_logs(service_name: str, tail: int = 100):
+    """
+    Get logs from a Docker Swarm service.
+    """
+    try:
+        if not swarm_manager:
+            return {
+                "success": False,
+                "message": "Docker Swarm manager not available"
+            }
+
+        result = swarm_manager.get_service_logs(service_name, tail)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get service logs: {str(e)}"
+        )
+
+
+@app.delete("/swarm/service/{service_name}", response_model=Dict[str, Any])
+async def remove_swarm_service(service_name: str):
+    """
+    Remove a Docker Swarm service.
+    """
+    try:
+        if not swarm_manager:
+            return {
+                "success": False,
+                "message": "Docker Swarm manager not available"
+            }
+
+        result = swarm_manager.remove_service(service_name)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to remove service: {str(e)}"
         )
 
 

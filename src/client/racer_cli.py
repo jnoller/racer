@@ -1077,5 +1077,303 @@ def scale(
         ctx.exit(1)
 
 
+@racer.command()
+@click.option(
+    "--project-name", "-n", required=True, help="Name of the project to scale up"
+)
+@click.option(
+    "--instances", "-i", required=True, type=int, help="Number of instances to scale to"
+)
+@click.pass_context
+def scale_up(ctx, project_name: str, instances: int):
+    """
+    Scale up an existing project to more instances using Docker Swarm.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    try:
+        client = RacerAPIClient(api_url, timeout=timeout, verbose=verbose)
+
+        # Prepare request data
+        request_data = {
+            "project_name": project_name,
+            "instances": instances,
+        }
+
+        if verbose:
+            click.echo(f"Scaling up project: {project_name}")
+            click.echo(f"Target instances: {instances}")
+
+        # Make API call
+        response = client._make_request("POST", "/project/scale-up", request_data)
+
+        if response.get("success"):
+            click.echo(click.style("✓ Project scaled up successfully", fg="green"))
+
+            containers = response.get("containers", [])
+            if containers:
+                click.echo("\nContainers:")
+                for container in containers:
+                    instance = container.get("instance", "unknown")
+                    container_id = container.get("container_id", "unknown")
+                    container_name = container.get("container_name", "unknown")
+                    container_ports = container.get("ports", {})
+
+                    click.echo(f"  Instance {instance}: {container_name}")
+                    click.echo(f"    ID: {container_id[:12]}")
+                    if container_ports:
+                        click.echo(f"    Ports: {container_ports}")
+                    click.echo()
+
+            message = response.get("message", "")
+            if message:
+                click.echo(f"Message: {message}")
+        else:
+            click.echo(click.style("✗ Project scale up failed", fg="red"))
+            error_msg = response.get("message", "Unknown error")
+            click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
+@racer.command()
+@click.option(
+    "--project-name", "-n", required=True, help="Name of the project to scale down"
+)
+@click.option(
+    "--instances", "-i", required=True, type=int, help="Number of instances to scale to"
+)
+@click.pass_context
+def scale_down(ctx, project_name: str, instances: int):
+    """
+    Scale down an existing project to fewer instances using Docker Swarm.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    try:
+        client = RacerAPIClient(api_url, timeout=timeout, verbose=verbose)
+
+        # Prepare request data
+        request_data = {
+            "project_name": project_name,
+            "instances": instances,
+        }
+
+        if verbose:
+            click.echo(f"Scaling down project: {project_name}")
+            click.echo(f"Target instances: {instances}")
+
+        # Make API call
+        response = client._make_request("POST", "/project/scale-down", request_data)
+
+        if response.get("success"):
+            click.echo(click.style("✓ Project scaled down successfully", fg="green"))
+
+            containers = response.get("containers", [])
+            if containers:
+                click.echo("\nContainers:")
+                for container in containers:
+                    instance = container.get("instance", "unknown")
+                    container_id = container.get("container_id", "unknown")
+                    container_name = container.get("container_name", "unknown")
+                    container_ports = container.get("ports", {})
+
+                    click.echo(f"  Instance {instance}: {container_name}")
+                    click.echo(f"    ID: {container_id[:12]}")
+                    if container_ports:
+                        click.echo(f"    Ports: {container_ports}")
+                    click.echo()
+
+            message = response.get("message", "")
+            if message:
+                click.echo(f"Message: {message}")
+        else:
+            click.echo(click.style("✗ Project scale down failed", fg="red"))
+            error_msg = response.get("message", "Unknown error")
+            click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
+@racer.command()
+@click.option("--project-name", "-n", help="Name of the project to check status")
+@click.pass_context
+def swarm_status(ctx, project_name: str):
+    """
+    Check the status of Docker Swarm services.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    try:
+        client = RacerAPIClient(api_url, timeout=timeout, verbose=verbose)
+
+        if project_name:
+            # Get status for specific service
+            response = client._make_request("GET", f"/swarm/service/{project_name}/status")
+            
+            if response.get("success"):
+                click.echo(click.style(f"✓ Service status for {project_name}", fg="green"))
+                click.echo(f"Service ID: {response.get('service_id', 'unknown')}")
+                click.echo(f"Replicas: {response.get('running_replicas', 0)}/{response.get('replicas', 0)}")
+                click.echo(f"Status: {response.get('status', 'unknown')}")
+                click.echo(f"Image: {response.get('image', 'unknown')}")
+                
+                ports = response.get("ports", {})
+                if ports:
+                    click.echo("Ports:")
+                    for port, mapping in ports.items():
+                        click.echo(f"  {port} -> {mapping}")
+                
+                message = response.get("message", "")
+                if message:
+                    click.echo(f"Message: {message}")
+            else:
+                click.echo(click.style("✗ Failed to get service status", fg="red"))
+                error_msg = response.get("message", "Unknown error")
+                click.echo(f"Error: {error_msg}")
+        else:
+            # List all services
+            response = client._make_request("GET", "/swarm/services")
+            
+            if response.get("success"):
+                services = response.get("services", [])
+                if services:
+                    click.echo(click.style("✓ Docker Swarm Services", fg="green"))
+                    click.echo()
+                    for service in services:
+                        click.echo(f"Service: {service.get('service_name', 'unknown')}")
+                        click.echo(f"  ID: {service.get('service_id', 'unknown')[:12]}")
+                        click.echo(f"  Replicas: {service.get('running_replicas', 0)}/{service.get('replicas', 0)}")
+                        click.echo(f"  Status: {service.get('status', 'unknown')}")
+                        click.echo(f"  Image: {service.get('image', 'unknown')}")
+                        
+                        ports = service.get("ports", {})
+                        if ports:
+                            click.echo("  Ports:")
+                            for port, mapping in ports.items():
+                                click.echo(f"    {port} -> {mapping}")
+                        click.echo()
+                else:
+                    click.echo("No Docker Swarm services found.")
+                
+                message = response.get("message", "")
+                if message:
+                    click.echo(f"Message: {message}")
+            else:
+                click.echo(click.style("✗ Failed to list services", fg="red"))
+                error_msg = response.get("message", "Unknown error")
+                click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
+@racer.command()
+@click.option("--project-name", "-n", required=True, help="Name of the project to get logs from")
+@click.option("--tail", "-t", default=100, help="Number of log lines to retrieve")
+@click.pass_context
+def swarm_logs(ctx, project_name: str, tail: int):
+    """
+    Get logs from a Docker Swarm service.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    try:
+        client = RacerAPIClient(api_url, timeout=timeout, verbose=verbose)
+
+        if verbose:
+            click.echo(f"Getting logs for service: {project_name}")
+            click.echo(f"Tail: {tail} lines")
+
+        # Make API call
+        response = client._make_request("GET", f"/swarm/service/{project_name}/logs?tail={tail}")
+
+        if response.get("success"):
+            logs = response.get("logs", "")
+            if logs:
+                click.echo(f"Logs for service {project_name}:")
+                click.echo("-" * 50)
+                click.echo(logs)
+            else:
+                click.echo("No logs available for this service.")
+        else:
+            click.echo(click.style("✗ Failed to get service logs", fg="red"))
+            error_msg = response.get("message", "Unknown error")
+            click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
+@racer.command()
+@click.option("--project-name", "-n", required=True, help="Name of the project to remove")
+@click.option("--force", "-f", is_flag=True, help="Force removal without confirmation")
+@click.pass_context
+def swarm_remove(ctx, project_name: str, force: bool):
+    """
+    Remove a Docker Swarm service.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    try:
+        if not force:
+            if not click.confirm(f"Are you sure you want to remove service '{project_name}'?"):
+                click.echo("Operation cancelled.")
+                return
+
+        client = RacerAPIClient(api_url, timeout=timeout, verbose=verbose)
+
+        if verbose:
+            click.echo(f"Removing service: {project_name}")
+
+        # Make API call
+        response = client._make_request("DELETE", f"/swarm/service/{project_name}")
+
+        if response.get("success"):
+            click.echo(click.style(f"✓ Service '{project_name}' removed successfully", fg="green"))
+            message = response.get("message", "")
+            if message:
+                click.echo(f"Message: {message}")
+        else:
+            click.echo(click.style("✗ Failed to remove service", fg="red"))
+            error_msg = response.get("message", "Unknown error")
+            click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
 if __name__ == "__main__":
     cli()

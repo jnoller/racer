@@ -19,8 +19,9 @@
 - 🧠 **Smart project name extraction** from container naming patterns
 - 🔧 **Dual CLI interface** for users and administrators
 - 🌐 **RESTful API** with health, validation, and container management endpoints
-- 📈 **Horizontal scaling** with Docker Compose for multiple instances
-- 🔄 **Load balancing ready** with Nginx configuration generation
+- 📈 **Horizontal scaling** with Docker Swarm for true dynamic scaling
+- 🔄 **Built-in load balancing** with automatic service discovery
+- 🐝 **Docker Swarm integration** for production-ready orchestration
 - 💾 **SQLite persistence** for project and container state tracking
 - 🔄 **State persistence** across backend restarts
 - 🧪 **Comprehensive testing** with unit and integration tests
@@ -143,10 +144,17 @@ racer status --project-id <id> # Check specific project by ID
 racer status --container-id <id> # Check specific container by ID
 racer status --list            # List all running projects
 
-# Scale a project to multiple instances
+# Scale a project to multiple instances (Docker Swarm)
 racer scale --project-name <name> --instances <n> --path <path>  # Scale local project
 racer scale --project-name <name> --instances <n> --git <url>    # Scale from git repo
 racer scale --project-name <name> --instances 3 --ports 8001:8000 # Scale with port mapping
+
+# Dynamic scaling with Docker Swarm
+racer scale-up --project-name <name> --instances <n>    # Scale up existing service
+racer scale-down --project-name <name> --instances <n>  # Scale down existing service
+racer swarm-status --project-name <name>                # Check swarm service status
+racer swarm-logs --project-name <name>                  # Get service logs
+racer swarm-remove --project-name <name>                # Remove swarm service
 
 # Rerun a project
 racer rerun                    # Rerun with rebuilt image (includes source changes)
@@ -345,6 +353,51 @@ Status checks provide detailed information including:
 - Start time and image information
 - Support for both single containers and scaled instances
 
+## Docker Swarm Integration
+
+Racer now leverages Docker Swarm for production-ready scaling and orchestration:
+
+### Key Benefits
+
+- **True Dynamic Scaling**: Scale up/down without recreating services
+- **Built-in Load Balancing**: Automatic traffic distribution across replicas
+- **High Availability**: Automatic failover and restart capabilities
+- **Service Discovery**: Built-in DNS resolution between services
+- **Health Monitoring**: Automatic health checks and recovery
+
+### Swarm Commands
+
+```bash
+# Create and scale a service
+racer scale --project-name "my-app" --instances 3 --path ./my-project
+
+# Dynamic scaling
+racer scale-up --project-name "my-app" --instances 5    # Scale to 5 replicas
+racer scale-down --project-name "my-app" --instances 2  # Scale down to 2 replicas
+
+# Service management
+racer swarm-status --project-name "my-app"              # Check service status
+racer swarm-logs --project-name "my-app"                # View service logs
+racer swarm-remove --project-name "my-app"              # Remove service
+```
+
+### Swarm vs Single Containers
+
+| Feature | Single Container | Docker Swarm |
+|---------|------------------|--------------|
+| Scaling | Manual recreation | Dynamic scaling |
+| Load Balancing | Manual port management | Built-in load balancing |
+| High Availability | Manual restart | Automatic failover |
+| Service Discovery | Manual networking | Built-in DNS |
+| Health Checks | Basic container status | Advanced health monitoring |
+
+### Automatic Swarm Initialization
+
+Racer automatically initializes Docker Swarm mode when needed:
+- Single-node swarm for development
+- Multi-node swarm for production
+- Automatic service creation and management
+
 ## Usage Examples
 
 ### 1. Deploy a Local Project
@@ -402,17 +455,30 @@ racer status --container-id <container_id>
 racer status --list
 ```
 
-### 6. Scale Projects
+### 6. Scale Projects with Docker Swarm
 
 ```bash
-# Scale a local project to 3 instances
+# Scale a local project to 3 instances (creates swarm service)
 racer scale --project-name my-app --instances 3 --path ./my-project
 
 # Scale from git repository
 racer scale --project-name my-app --instances 5 --git https://github.com/user/repo
 
-# Scale with custom port mapping (auto-increments host ports)
+# Scale with custom port mapping (built-in load balancing)
 racer scale --project-name my-app --instances 3 --ports 8001:8000
+
+# Dynamic scaling (scale up/down existing services)
+racer scale-up --project-name my-app --instances 5    # Scale to 5 replicas
+racer scale-down --project-name my-app --instances 2  # Scale down to 2 replicas
+
+# Check swarm service status
+racer swarm-status --project-name my-app
+
+# View service logs
+racer swarm-logs --project-name my-app --tail 50
+
+# Remove swarm service
+racer swarm-remove --project-name my-app
 
 # Scale with custom configuration
 racer scale --project-name my-app --instances 2 --path ./my-project \
@@ -647,5 +713,9 @@ mypy src/
 - **Smart project name extraction** from container naming patterns
 - **Container ID support** for direct container status checks
 - **Docker Compose container status** integration
+- **Docker Swarm integration** for production-ready scaling and orchestration
+- **Dynamic scaling commands** (scale-up, scale-down) with Docker Swarm
+- **Built-in load balancing** and service discovery
+- **Swarm service management** (status, logs, remove) commands
 - Comprehensive testing infrastructure
 - Development automation with Makefile

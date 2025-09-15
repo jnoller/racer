@@ -261,8 +261,13 @@ class DatabaseManager:
     # Scale group operations
     def create_scale_group(
         self,
-        project_name: str,
-        instances: int,
+        name: str,
+        service_id: str = None,
+        replicas: int = 1,
+        image: str = None,
+        ports: dict = None,
+        environment: dict = None,
+        deployment_type: str = "compose",
         compose_file_path: str = None,
         nginx_config_path: str = None,
         use_load_balancer: bool = False,
@@ -271,8 +276,13 @@ class DatabaseManager:
         session = self.get_session()
         try:
             scale_group = ScaleGroup(
-                project_name=project_name,
-                instances=instances,
+                name=name,
+                service_id=service_id,
+                replicas=replicas,
+                image=image or "",
+                ports=ports or {},
+                environment=environment or {},
+                deployment_type=deployment_type,
                 compose_file_path=compose_file_path,
                 nginx_config_path=nginx_config_path,
                 use_load_balancer=use_load_balancer,
@@ -288,13 +298,13 @@ class DatabaseManager:
         finally:
             self.close_session(session)
 
-    def get_scale_group(self, project_name: str) -> Optional[ScaleGroup]:
-        """Get a scale group by project name."""
+    def get_scale_group(self, name: str) -> Optional[ScaleGroup]:
+        """Get a scale group by name."""
         session = self.get_session()
         try:
             return (
                 session.query(ScaleGroup)
-                .filter(ScaleGroup.project_name == project_name)
+                .filter(ScaleGroup.name == name)
                 .first()
             )
         except SQLAlchemyError as e:
@@ -303,15 +313,49 @@ class DatabaseManager:
         finally:
             self.close_session(session)
 
-    def delete_scale_group(self, project_name: str) -> bool:
-        """Delete a scale group."""
+    def get_scale_group_by_name(self, name: str) -> Optional[ScaleGroup]:
+        """Get a scale group by name (alias for get_scale_group)."""
+        return self.get_scale_group(name)
+
+    def get_scale_group_by_service_id(self, service_id: str) -> Optional[ScaleGroup]:
+        """Get a scale group by service ID."""
         session = self.get_session()
         try:
-            scale_group = (
+            return (
                 session.query(ScaleGroup)
-                .filter(ScaleGroup.project_name == project_name)
+                .filter(ScaleGroup.service_id == service_id)
                 .first()
             )
+        except SQLAlchemyError as e:
+            print(f"Failed to get scale group by service ID: {e}")
+            return None
+        finally:
+            self.close_session(session)
+
+    def update_scale_group(self, scale_group_id: int, **kwargs) -> bool:
+        """Update a scale group."""
+        session = self.get_session()
+        try:
+            scale_group = session.query(ScaleGroup).filter(ScaleGroup.id == scale_group_id).first()
+            if scale_group:
+                for key, value in kwargs.items():
+                    if hasattr(scale_group, key):
+                        setattr(scale_group, key, value)
+                session.commit()
+                return True
+            return False
+        except SQLAlchemyError as e:
+            session.rollback()
+            print(f"Failed to update scale group: {e}")
+            return False
+        finally:
+            self.close_session(session)
+
+    def delete_scale_group(self, scale_group_id: int) -> bool:
+        """Delete a scale group by ID."""
+        session = self.get_session()
+        try:
+            scale_group = session.query(ScaleGroup).filter(ScaleGroup.id == scale_group_id).first()
             if scale_group:
                 session.delete(scale_group)
                 session.commit()
