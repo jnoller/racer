@@ -112,8 +112,8 @@ def deploy(
             request_data["command"] = command
 
         if build_only:
-            # Use the old /run endpoint for build-only
-            response = client._make_request("POST", "/run", json=request_data)
+            # Use the new /api/v1/dockerfile endpoint for build-only
+            response = client._make_request("POST", "/api/v1/dockerfile", json=request_data)
 
             if verbose:
                 click.echo("Build preparation response:")
@@ -140,9 +140,9 @@ def deploy(
                         )
                     )
         else:
-            # Use the new /containers/run endpoint for actual container execution
+            # Use the new /api/v1/deploy endpoint for actual container execution
             response = client._make_request(
-                "POST", "/containers/run", json=request_data
+                "POST", "/api/v1/deploy", json=request_data
             )
 
             if verbose:
@@ -221,7 +221,7 @@ def validate(ctx, project_path: str, git_url: str):
             request_data["git_url"] = git_url
 
         # Make API request
-        response = client._make_request("POST", "/validate", json=request_data)
+        response = client._make_request("POST", "/api/v1/validate", json=request_data)
 
         if verbose:
             click.echo("Validation response:")
@@ -299,7 +299,7 @@ def dockerfile(ctx, project_path: str, git_url: str, custom_commands: str):
             ]
 
         # Make API request
-        response = client._make_request("POST", "/dockerfile", json=request_data)
+        response = client._make_request("POST", "/api/v1/dockerfile", json=request_data)
 
         if verbose:
             click.echo("Dockerfile generation response:")
@@ -374,7 +374,7 @@ def status(
 
         # If list flag is set, show all projects
         if list_projects:
-            projects_response = client._make_request("GET", "/projects")
+            projects_response = client._make_request("GET", "/api/v1/projects")
             if projects_response.get("success"):
                 projects = projects_response.get("projects", [])
                 if projects:
@@ -394,7 +394,7 @@ def status(
 
         # Handle project name - show all instances of that project
         if project_name:
-            projects_response = client._make_request("GET", "/projects")
+            projects_response = client._make_request("GET", "/api/v1/projects")
             if projects_response.get("success"):
                 projects = projects_response.get("projects", [])
                 matching_projects = [
@@ -433,7 +433,7 @@ def status(
 
         # If no project name, project ID or container ID provided, list projects and ask user to choose
         if not project_id and not container_id:
-            projects_response = client._make_request("GET", "/projects")
+            projects_response = client._make_request("GET", "/api/v1/projects")
             if projects_response.get("success"):
                 projects = projects_response.get("projects", [])
                 if not projects:
@@ -459,16 +459,10 @@ def status(
                 click.echo(click.style("Failed to list projects", fg="red"), err=True)
                 return
 
-        # Get project status
-        if project_id:
-            status_response = client._make_request(
-                "POST", "/project/status-by-id", json={"project_id": project_id}
-            )
-        else:
-            # Legacy container ID support
-            status_response = client._make_request(
-                "POST", "/project/status", json={"container_id": container_id}
-            )
+        # Get project status using project name
+        status_response = client._make_request(
+            "POST", "/api/v1/status", json={"project_name": project_name}
+        )
 
         if verbose:
             click.echo("Status response:")
@@ -553,7 +547,7 @@ def list(ctx, verbose: bool):
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
 
         # Get projects list
-        projects_response = client._make_request("GET", "/projects")
+        projects_response = client._make_request("GET", "/api/v1/projects")
 
         if projects_response.get("success"):
             projects = projects_response.get("projects", [])
@@ -683,7 +677,7 @@ def scale(
             request_data["command"] = command
 
         # Make API request
-        response = client._make_request("POST", "/project/scale", json=request_data)
+        response = client._make_request("POST", "/api/v1/scale", json=request_data)
 
         if verbose:
             click.echo("Scale response:")
@@ -791,7 +785,7 @@ def stop(ctx, project_name: str, force: bool):
             pass
 
         # Check for individual containers with this project name
-        projects_response = client._make_request("GET", "/projects")
+        projects_response = client._make_request("GET", "/api/v1/projects")
         if not projects_response.get("success"):
             click.echo(click.style("Failed to list projects", fg="red"), err=True)
             ctx.exit(1)
@@ -922,7 +916,7 @@ def rerun(
 
         # If list flag is set, show all projects
         if list_projects:
-            projects_response = client._make_request("GET", "/projects")
+            projects_response = client._make_request("GET", "/api/v1/projects")
             if projects_response.get("success"):
                 projects = projects_response.get("projects", [])
                 if projects:
@@ -941,7 +935,7 @@ def rerun(
             return
 
         # Find projects by name
-        projects_response = client._make_request("GET", "/projects")
+        projects_response = client._make_request("GET", "/api/v1/projects")
         if projects_response.get("success"):
             projects = projects_response.get("projects", [])
             matching_projects = [
@@ -1060,7 +1054,7 @@ def rerun(
                 request_data["command"] = command
 
             # Make API call
-            response = client._make_request("POST", "/project/rerun", json=request_data)
+            response = client._make_request("POST", "/api/v1/rerun", json=request_data)
 
             if response.get("success"):
                 click.echo(

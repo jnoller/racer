@@ -518,7 +518,7 @@ def list_containers(ctx):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("GET", "/containers")
+        response = client._make_request("GET", "/admin/containers")
 
         if verbose:
             click.echo("Containers response:")
@@ -591,7 +591,7 @@ def container_status(ctx, container_id: str):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("GET", f"/containers/{container_id}/status")
+        response = client._make_request("GET", f"/admin/containers/{container_id}/status")
 
         if verbose:
             click.echo("Container status response:")
@@ -691,7 +691,7 @@ def stop_container(ctx, container_id: str):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("POST", f"/containers/{container_id}/stop")
+        response = client._make_request("POST", f"/admin/containers/{container_id}/stop")
 
         if verbose:
             click.echo("Stop container response:")
@@ -729,7 +729,7 @@ def remove_container(ctx, container_id: str):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("DELETE", f"/containers/{container_id}")
+        response = client._make_request("DELETE", f"/admin/containers/{container_id}")
 
         if verbose:
             click.echo("Remove container response:")
@@ -765,7 +765,7 @@ def cleanup_containers(ctx):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("POST", "/containers/cleanup")
+        response = client._make_request("POST", "/admin/containers/cleanup")
 
         if verbose:
             click.echo("Cleanup response:")
@@ -805,7 +805,7 @@ def swarm_status(ctx, project_name: str):
         if project_name:
             # Get status for specific service
             response = client._make_request(
-                "GET", f"/swarm/service/{project_name}/status"
+                "GET", f"/admin/swarm/service/{project_name}/status"
             )
 
             if response.get("success"):
@@ -834,7 +834,7 @@ def swarm_status(ctx, project_name: str):
                 click.echo(f"Error: {error_msg}")
         else:
             # List all services
-            response = client._make_request("GET", "/swarm/services")
+            response = client._make_request("GET", "/admin/swarm/services")
 
             if response.get("success"):
                 services = response.get("services", [])
@@ -898,7 +898,7 @@ def swarm_logs(ctx, project_name: str, tail: int):
 
         # Make API call
         response = client._make_request(
-            "GET", f"/swarm/service/{project_name}/logs?tail={tail}"
+            "GET", f"/admin/swarm/service/{project_name}/logs?tail={tail}"
         )
 
         if response.get("success"):
@@ -950,7 +950,7 @@ def swarm_remove(ctx, project_name: str, force: bool):
             click.echo(f"Removing service: {project_name}")
 
         # Make API call
-        response = client._make_request("DELETE", f"/swarm/service/{project_name}")
+        response = client._make_request("DELETE", f"/admin/swarm/service/{project_name}")
 
         if response.get("success"):
             click.echo(
