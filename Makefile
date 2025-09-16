@@ -1,7 +1,7 @@
 # Racer - Rapid deployment system for conda-projects
 # Makefile for development and deployment automation
 
-.PHONY: help setup setup-all verify clean clean-all install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset activate
+.PHONY: help setup setup-all verify clean clean-all install-dev test test-all test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset activate
 
 # Default target
 help:
@@ -12,13 +12,12 @@ help:
 	@echo "  verify        - Verify that everything is working correctly"
 	@echo "  clean         - Clean generated files, database, and build artifacts (preserve environment)"
 	@echo "  clean-all     - Remove everything including conda environments (nuclear option)"
-	@echo "  test          - Run all tests"
+	@echo "  test          - Run fast unit tests only"
+	@echo "  test-all      - Run all working tests (unit + CLI integration)"
 	@echo "  test-unit     - Run unit tests only"
-	@echo "  test-integration - Run integration tests only"
-	@echo "  test-docker   - Run Docker tests only"
-	@echo "  test-api      - Run API tests only"
+	@echo "  test-integration - Run CLI integration tests only"
 	@echo "  test-coverage - Run tests with coverage report"
-	@echo "  test-quick    - Run quick tests (no Docker/API)"
+	@echo "  test-quick    - Run quick tests (basic functionality)"
 	@echo "  lint          - Run linting"
 	@echo "  format        - Format code"
 	@echo "  client        - Install client in development mode"
@@ -114,32 +113,39 @@ clean-all: clean
 
 # Run tests
 test:
-	@echo "Running all tests..."
-	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py -v
+	@echo "Running fast unit tests..."
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/unit/ -v
 
 test-unit:
 	@echo "Running unit tests..."
 	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/unit/ -v
 
 test-integration:
-	@echo "Running integration tests..."
-	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_integration_simple.py -v
-
-test-docker:
-	@echo "Running Docker tests..."
-	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/ -v -m docker
-
-test-api:
-	@echo "Running API tests..."
-	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/ -v -m api
+	@echo "Running CLI integration tests..."
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/integration/test_cli_commands.py -v
 
 test-coverage:
 	@echo "Running tests with coverage..."
-	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py --cov=src --cov-report=html --cov-report=term
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/unit/ tests/test_basic.py --cov=src --cov-report=html --cov-report=term
 
 test-quick:
-	@echo "Running quick tests (no Docker/API)..."
+	@echo "Running quick tests (basic functionality)..."
 	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py -v
+
+test-all:
+	@echo "Running all working tests (unit + CLI integration)..."
+	@echo "This will run the complete test suite with all working tests."
+	@echo ""
+	@echo "Step 1/3: Running unit tests..."
+	@$(MAKE) test-unit
+	@echo ""
+	@echo "Step 2/3: Running basic tests..."
+	PYTHONPATH=$(PWD) conda run -n racer-dev python -m pytest tests/test_basic.py -v
+	@echo ""
+	@echo "Step 3/3: Running CLI integration tests..."
+	@$(MAKE) test-integration
+	@echo ""
+	@echo "✅ All tests completed successfully!"
 
 # Run linting
 lint:

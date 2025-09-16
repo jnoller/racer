@@ -64,16 +64,6 @@ racerctl server start
 racer deploy --project-name "my-app" --path ./my-conda-project
 ```
 
-### Fresh Start (if needed)
-
-```bash
-# Nuclear cleanup - removes everything including environments
-make clean-all
-
-# Start over
-make setup-all
-```
-
 ## Project Structure
 
 ```
