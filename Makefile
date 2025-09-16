@@ -6,7 +6,7 @@
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  setup-all     - Complete setup: environment, dependencies, database, and verification"
+	@echo "  setup-all     - Complete setup: environment, dependencies, database, and verification (preserves existing environment)"
 	@echo "  setup         - Create conda environment and install dependencies"
 	@echo "  install-dev   - Install development dependencies"
 	@echo "  verify        - Verify that everything is working correctly"
@@ -31,12 +31,14 @@ help:
 setup-all:
 	@echo "🚀 Starting complete Racer setup..."
 	@echo ""
-	@echo "Step 1/6: Cleaning up any existing environments..."
-	@$(MAKE) clean-all
-	@echo "✅ Complete cleanup finished"
-	@echo ""
-	@echo "Step 2/6: Creating development environment..."
-	@$(MAKE) install-dev
+	@echo "Step 1/6: Checking existing environments..."
+	@if conda info --envs | grep -q "racer-dev"; then \
+		echo "✅ racer-dev environment already exists"; \
+		echo "Step 2/6: Skipping environment creation..."; \
+	else \
+		echo "Step 2/6: Creating development environment..."; \
+		$(MAKE) install-dev; \
+	fi
 	@echo ""
 	@echo "Step 3/6: Initializing database..."
 	@$(MAKE) db-init

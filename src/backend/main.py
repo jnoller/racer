@@ -24,7 +24,7 @@ from docker_manager import ContainerManager
 from swarm_manager import SwarmManager
 
 try:
-    from .database import DatabaseManager
+    from database import DatabaseManager
 except ImportError:
     from database import DatabaseManager
 

@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 import threading
 import queue
-from .port_manager import get_random_port, get_service_port_range
+from port_manager import get_random_port, get_service_port_range
 
 
 class ContainerManager:
