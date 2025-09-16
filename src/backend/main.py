@@ -36,10 +36,33 @@ except ImportError:
 # Create FastAPI application
 app = FastAPI(
     title="Racer API",
-    description="Rapid deployment system for conda-projects",
+    description="""
+    **Racer** - Rapid deployment system for conda-projects
+    
+    A Heroku/Fly.io-like REST API for deploying conda-project applications to Docker containers.
+    
+    ## API Structure
+    
+    - **`/api/v1/`** - User-facing endpoints (matches `racer` CLI commands)
+    - **`/admin/`** - Administrative endpoints (matches `racerctl` CLI commands)  
+    - **`/`** - System endpoints (health, liveness, etc.)
+    
+    ## Quick Start
+    
+    1. **Deploy a project**: `POST /api/v1/deploy`
+    2. **List projects**: `GET /api/v1/projects`
+    3. **Check status**: `GET /api/v1/status`
+    
+    ## Interactive Documentation
+    
+    - **Swagger UI**: [/docs](/docs) - Interactive API explorer
+    - **ReDoc**: [/redoc](/redoc) - Alternative documentation format
+    - **OpenAPI Spec**: [/openapi.json](/openapi.json) - Machine-readable API specification
+    """,
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # ============================================================================
@@ -202,6 +225,62 @@ async def readiness_check():
         return {"ready": True, "timestamp": datetime.now().isoformat()}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
+
+
+@app.get("/api/info")
+async def api_info():
+    """
+    Get API information and available endpoints.
+    
+    Returns a summary of the API structure and available endpoints for easy discovery.
+    """
+    return {
+        "name": "Racer API",
+        "version": "0.1.0",
+        "description": "Rapid deployment system for conda-projects",
+        "documentation": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc", 
+            "openapi_spec": "/openapi.json"
+        },
+        "endpoints": {
+            "user_facing": {
+                "base_path": "/api/v1/",
+                "description": "User-facing endpoints (matches `racer` CLI commands)",
+                "endpoints": [
+                    "POST /api/v1/deploy - Deploy a conda-project",
+                    "GET /api/v1/projects - List all projects", 
+                    "POST /api/v1/status - Get project status",
+                    "POST /api/v1/rerun - Rerun a project",
+                    "POST /api/v1/scale - Scale a project",
+                    "POST /api/v1/validate - Validate a conda-project"
+                ]
+            },
+            "admin": {
+                "base_path": "/admin/",
+                "description": "Administrative endpoints (matches `racerctl` CLI commands)",
+                "endpoints": [
+                    "GET /admin/containers - List all containers",
+                    "POST /admin/containers/cleanup - Cleanup containers",
+                    "GET /admin/swarm/services - List swarm services",
+                    "GET /admin/swarm/service/{name}/status - Get service status",
+                    "GET /admin/swarm/service/{name}/logs - Get service logs",
+                    "DELETE /admin/swarm/service/{name} - Remove service"
+                ]
+            },
+            "system": {
+                "base_path": "/",
+                "description": "System health and info endpoints",
+                "endpoints": [
+                    "GET / - API root information",
+                    "GET /health - Health check",
+                    "GET /liveness - Liveness check", 
+                    "GET /ready - Readiness check",
+                    "GET /api/info - This endpoint"
+                ]
+            }
+        }
+    }
 
 
 # ============================================================================

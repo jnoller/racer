@@ -285,14 +285,38 @@ racerctl swarm remove --project-name "my-app" --force
 
 ## API
 
-The backend provides a RESTful API at `http://localhost:8001`:
+The backend provides a RESTful API at `http://localhost:8001` with comprehensive documentation:
 
+### 📚 Interactive Documentation
+
+- **Swagger UI**: [http://localhost:8001/docs](http://localhost:8001/docs) - Interactive API explorer
+- **ReDoc**: [http://localhost:8001/redoc](http://localhost:8001/redoc) - Alternative documentation format  
+- **OpenAPI Spec**: [http://localhost:8001/openapi.json](http://localhost:8001/openapi.json) - Machine-readable API specification
+- **API Info**: [http://localhost:8001/api/info](http://localhost:8001/api/info) - Endpoint summary
+
+### 🎯 API Structure
+
+**User-facing endpoints** (`/api/v1/` - matches `racer` CLI):
+- `POST /api/v1/deploy` - Deploy a conda-project
+- `GET /api/v1/projects` - List all projects
+- `POST /api/v1/status` - Get project status
+- `POST /api/v1/rerun` - Rerun a project
+- `POST /api/v1/scale` - Scale a project
+- `POST /api/v1/validate` - Validate a conda-project
+
+**Admin endpoints** (`/admin/` - matches `racerctl` CLI):
+- `GET /admin/containers` - List all containers
+- `POST /admin/containers/cleanup` - Cleanup containers
+- `GET /admin/swarm/services` - List swarm services
+- `GET /admin/swarm/service/{name}/status` - Get service status
+- `GET /admin/swarm/service/{name}/logs` - Get service logs
+- `DELETE /admin/swarm/service/{name}` - Remove service
+
+**System endpoints** (`/`):
+- `GET /` - API root information
 - `GET /health` - Health check
-- `POST /validate` - Validate conda-project
-- `POST /containers/run` - Run container
-- `POST /project/scale` - Scale project
-- `POST /project/rerun` - Rerun project
-- `GET /containers` - List containers
+- `GET /liveness` - Liveness check
+- `GET /ready` - Readiness check
 
 ## Port Management
 
