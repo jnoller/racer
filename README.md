@@ -27,10 +27,8 @@ git clone git@github.com:jnoller/racer.git
 cd racer
 make setup-all
 
-# 2. Start working (choose one)
-make shell                    # Interactive shell with environment activated
-# OR
-conda activate racer-dev      # Manual activation
+# 2. Activate the environment
+conda activate racer-dev
 
 # 3. Deploy your first project
 racerctl server start
@@ -49,8 +47,8 @@ racer run --project-name "my-app" --path /path/to/your/conda-project
 # Complete setup (creates environment, installs dependencies, initializes database)
 make setup-all
 
-# Start working immediately
-make shell
+# Activate the environment
+conda activate racer-dev
 ```
 
 ### Daily Development
@@ -192,7 +190,6 @@ Essential commands for development:
 ```bash
 # Setup
 make setup-all          # Complete setup (environment, dependencies, database)
-make shell              # Start interactive shell with environment activated
 make clean              # Clean generated files (preserves environment)
 make clean-all          # Nuclear cleanup (removes everything)
 
