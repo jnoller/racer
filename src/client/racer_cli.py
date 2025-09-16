@@ -89,7 +89,9 @@ def deploy(
         # Prepare request data
         request_data = {"project_name": project_name}
         if project_path:
-            request_data["project_path"] = project_path
+            # Convert relative paths to absolute paths to avoid working directory issues
+            import os
+            request_data["project_path"] = os.path.abspath(project_path)
         if git_url:
             request_data["git_url"] = git_url
         # Handle port configuration
@@ -574,7 +576,9 @@ def scale(
         request_data = {"project_name": project_name, "instances": instances}
 
         if project_path:
-            request_data["project_path"] = project_path
+            # Convert relative paths to absolute paths to avoid working directory issues
+            import os
+            request_data["project_path"] = os.path.abspath(project_path)
         if git_url:
             request_data["git_url"] = git_url
 

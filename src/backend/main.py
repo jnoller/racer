@@ -16,6 +16,8 @@ from typing import Dict, Any, Optional, List
 import uvicorn
 import os
 import uuid
+import tempfile
+import shutil
 from datetime import datetime
 
 # Import our custom modules
@@ -419,15 +421,27 @@ async def deploy_project(request: ContainerRunRequest):
             # Generate Dockerfile content
             dockerfile_content = generate_dockerfile(project_path)
 
-            # Write Dockerfile to file
-            dockerfile_path = write_dockerfile(project_path)
+            # Write Dockerfile to project directory temporarily
+            # Convert to absolute path to avoid working directory issues
+            project_path = os.path.abspath(project_path)
+            dockerfile_path = os.path.join(project_path, "Dockerfile")
+            
+            # Remove existing Dockerfile if it exists
+            if os.path.exists(dockerfile_path):
+                os.remove(dockerfile_path)
+            
+            with open(dockerfile_path, "w") as f:
+                f.write(dockerfile_content)
 
             # Return build instructions
             instructions = {
-                "build": f"docker build -t {request.project_name} -f {dockerfile_path} .",
+                "build": f"docker build -t {request.project_name} .",
                 "run": f"docker run -p 8000:8000 {request.project_name}",
                 "run_interactive": f"docker run -it -p 8000:8000 {request.project_name} /bin/bash",
             }
+
+            # Note: We don't clean up the Dockerfile here for build-only mode
+            # because the user might want to use it for building
 
             return ContainerRunResponse(
                 success=True,
@@ -461,8 +475,19 @@ async def deploy_project(request: ContainerRunRequest):
                 message="Either project_path or git_url must be provided",
             )
 
-        # Generate Dockerfile
-        dockerfile_path = write_dockerfile(project_path)
+        # Generate Dockerfile and write it to the project directory temporarily
+        # Convert to absolute path to avoid working directory issues
+        project_path = os.path.abspath(project_path)
+        dockerfile_path = os.path.join(project_path, "Dockerfile")
+        
+        # Remove existing Dockerfile if it exists
+        if os.path.exists(dockerfile_path):
+            os.remove(dockerfile_path)
+        
+        # Write Dockerfile to project directory (temporarily)
+        dockerfile_content = generate_dockerfile(project_path)
+        with open(dockerfile_path, "w") as f:
+            f.write(dockerfile_content)
 
         # Build the image
         build_result = container_manager.build_image(
@@ -470,6 +495,10 @@ async def deploy_project(request: ContainerRunRequest):
             project_name=request.project_name,
             dockerfile_path=dockerfile_path,
         )
+        
+        # Clean up the temporary Dockerfile from project directory
+        if os.path.exists(dockerfile_path):
+            os.remove(dockerfile_path)
 
         if not build_result["success"]:
             return ContainerRunResponse(
