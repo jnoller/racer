@@ -791,8 +791,7 @@ def stop(ctx, project_name: str, force: bool):
     "--project-name",
     "-n",
     "project_name",
-    required=True,
-    help="Project name to rerun (will rerun all instances of this project)",
+    help="Project name to redeploy (will redeploy all instances of this project)",
 )
 @click.option(
     "--environment",
@@ -810,7 +809,7 @@ def stop(ctx, project_name: str, force: bool):
     "--list", "list_projects", is_flag=True, help="List all running projects first"
 )
 @click.pass_context
-def rerun(
+def redeploy(
     ctx,
     project_name: str,
     environment: str,
@@ -819,7 +818,7 @@ def rerun(
     list_projects: bool,
 ):
     """
-    Rerun a project by stopping the existing container and starting a new one.
+    Redeploy a project by stopping the existing container and starting a new one.
     """
     api_url = ctx.obj["api_url"]
     timeout = ctx.obj["timeout"]
@@ -847,6 +846,11 @@ def rerun(
             else:
                 click.echo(click.style("Failed to list projects", fg="red"), err=True)
             return
+
+        # Validate required parameters
+        if not project_name:
+            click.echo(click.style("Error: --project-name is required when not using --list", fg="red"), err=True)
+            ctx.exit(1)
 
         # Find projects by name
         projects_response = client._make_request("GET", "/api/v1/projects")
@@ -958,11 +962,11 @@ def rerun(
                 request_data["command"] = command
 
             # Make API call
-            response = client._make_request("POST", "/api/v1/rerun", json=request_data)
+            response = client._make_request("POST", "/api/v1/redeploy", json=request_data)
 
             if response.get("success"):
                 click.echo(
-                    click.style("✓ Project rerun initiated successfully", fg="green")
+                    click.style("✓ Project redeploy initiated successfully", fg="green")
                 )
                 if verbose:
                     click.echo(f"Response: {response}")

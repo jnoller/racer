@@ -160,26 +160,26 @@ racer scale --project-name "my-app" --instances 5 --path ./my-project --app-port
 racer scale --project-name "my-app" --instances 2 --path ./my-project --app-port 8000
 ```
 
-#### Rerun Projects
+#### Redeploy Projects
 
 ```bash
-# Rerun with rebuilt image (includes source changes)
-racer rerun --project-name "my-app"
+# Redeploy with rebuilt image (includes source changes)
+racer redeploy --project-name "my-app"
 
 # Fast restart without rebuilding (configuration changes only)
-racer rerun --project-name "my-app" --no-rebuild
+racer redeploy --project-name "my-app" --no-rebuild
 
-# Rerun with new environment variables
-racer rerun --project-name "my-app" --environment DEBUG=true,LOG_LEVEL=debug
+# Redeploy with new environment variables
+racer redeploy --project-name "my-app" --environment DEBUG=true,LOG_LEVEL=debug
 
-# Rerun with new command
-racer rerun --project-name "my-app" --command "python app.py --debug"
+# Redeploy with new command
+racer redeploy --project-name "my-app" --command "python app.py --debug"
 
-# Rerun a project
-racer rerun --project-name "my-app"
+# Redeploy a project
+racer redeploy --project-name "my-app"
 
-# List projects before rerunning
-racer rerun --list
+# List projects before redeploying
+racer redeploy --list
 ```
 
 #### Project Management
@@ -300,7 +300,7 @@ The backend provides a RESTful API at `http://localhost:8001` with comprehensive
 - `POST /api/v1/deploy` - Deploy a conda-project
 - `GET /api/v1/projects` - List all projects
 - `POST /api/v1/status` - Get project status
-- `POST /api/v1/rerun` - Rerun a project
+- `POST /api/v1/redeploy` - Redeploy a project
 - `POST /api/v1/scale` - Scale a project
 - `POST /api/v1/validate` - Validate a conda-project
 
@@ -366,7 +366,7 @@ racer status --project-name "my-app"
 racer scale --project-name "my-app" --instances 3 --app-port 8000
 
 # Restart with new config
-racer rerun --project-name "my-app" --environment DEBUG=true
+racer redeploy --project-name "my-app" --environment DEBUG=true
 ```
 
 ## Development

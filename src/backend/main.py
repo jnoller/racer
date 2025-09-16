@@ -304,7 +304,7 @@ async def api_info():
                     "POST /api/v1/deploy - Deploy a conda-project",
                     "GET /api/v1/projects - List all projects", 
                     "POST /api/v1/status - Get project status",
-                    "POST /api/v1/rerun - Rerun a project",
+                    "POST /api/v1/redeploy - Redeploy a project",
                     "POST /api/v1/scale - Scale a project",
                     "POST /api/v1/validate - Validate a conda-project"
                 ]
@@ -669,12 +669,12 @@ async def get_project_status(request: ProjectStatusRequest):
         )
 
 
-@app.post("/api/v1/rerun", response_model=ProjectRerunResponse)
-async def rerun_project(request: ProjectRerunRequest):
+@app.post("/api/v1/redeploy", response_model=ProjectRerunResponse)
+async def redeploy_project(request: ProjectRerunRequest):
     """
-    Rerun a project by stopping the existing container and starting a new one.
+    Redeploy a project by stopping the existing container and starting a new one.
 
-    This endpoint matches: racer rerun
+    This endpoint matches: racer redeploy
     """
     try:
         # Initialize managers if needed
