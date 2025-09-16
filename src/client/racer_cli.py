@@ -806,7 +806,14 @@ def stop(ctx, project_name: str, force: bool):
     "--project-name",
     "-n",
     "project_name",
+    required=True,
     help="Project name to redeploy (will redeploy all instances of this project)",
+)
+@click.option(
+    "--path",
+    "-p",
+    "project_path",
+    help="Path to local conda-project directory (required for redeploy)",
 )
 @click.option(
     "--environment",
@@ -827,13 +834,17 @@ def stop(ctx, project_name: str, force: bool):
 def redeploy(
     ctx,
     project_name: str,
+    project_path: str,
     environment: str,
     command: str,
     no_rebuild: bool,
     list_projects: bool,
 ):
     """
-    Redeploy a project by stopping the existing container and starting a new one.
+    Redeploy a project by stopping existing containers/swarm services and starting new ones.
+    
+    For swarm services, maintains the current scale state (number of instances).
+    Requires --path option to specify the project directory for rebuilding.
     """
     api_url = ctx.obj["api_url"]
     timeout = ctx.obj["timeout"]
@@ -963,6 +974,9 @@ def redeploy(
                 "project_name": project_name,
                 "no_rebuild": no_rebuild,
             }
+
+            if project_path:
+                request_data["project_path"] = project_path
 
             if environment:
                 # Send environment as string (API expects string format)

@@ -740,16 +740,24 @@ async def redeploy_project(request: ProjectRerunRequest):
             swarm_manager.remove_service(service_name)
 
             # Stop any individual containers
-            if project.container_id:
+            if hasattr(project, 'container_id') and project.container_id:
                 container_manager.stop_container(project.container_id)
 
             # Redeploy as swarm service with same instance count
+            # Use provided project_path or fall back to stored path
+            deploy_path = request.project_path or project.project_path
+            if not deploy_path:
+                return ProjectRerunResponse(
+                    success=False,
+                    message="Project path is required for redeploy. Please provide --path option.",
+                )
+
             # First, we need to build the image
             image_name = f"racer-{request.project_name}:latest"
             build_result = container_manager.build_image(
                 project_name=request.project_name,
-                project_path=project.project_path,
-                git_url=project.git_url,
+                project_path=deploy_path,
+                dockerfile_path=os.path.join(deploy_path, "Dockerfile"),
             )
 
             if not build_result.get("success", False):
@@ -787,8 +795,16 @@ async def redeploy_project(request: ProjectRerunRequest):
                 )
         else:
             # Project is single container - redeploy as single container
-            if project.container_id:
+            if hasattr(project, 'container_id') and project.container_id:
                 container_manager.stop_container(project.container_id)
+
+            # Use provided project_path or fall back to stored path
+            deploy_path = request.project_path or project.project_path
+            if not deploy_path:
+                return ProjectRerunResponse(
+                    success=False,
+                    message="Project path is required for redeploy. Please provide --path option.",
+                )
 
             # Generate new project ID
             new_project_id = str(uuid.uuid4())
@@ -802,12 +818,11 @@ async def redeploy_project(request: ProjectRerunRequest):
             )
 
             if run_result["success"]:
-                # Update database
-                db_manager.update_project(
-                    project_id=new_project_id,
-                    project_name=request.project_name,
-                    container_id=run_result["container_id"],
-                    project_path=request.project_path or project.project_path,
+                # Create new project record for the redeployed container
+                db_manager.create_project(
+                    name=request.project_name,
+                    image_name=f"racer-{request.project_name}",
+                    project_path=deploy_path,
                     git_url=request.git_url or project.git_url,
                 )
 
