@@ -70,18 +70,17 @@ app = FastAPI(
 # ============================================================================
 
 
-
-
 class StatusResponse(BaseModel):
     """Comprehensive status response consolidating all status checks."""
+
     # Overall status
     overall_status: str  # "healthy", "degraded", "unhealthy"
-    
+
     # Service information
     service: str
     version: str
     timestamp: str
-    
+
     # Individual status checks
     health: Dict[str, Any]
     liveness: Dict[str, Any]
@@ -95,12 +94,10 @@ class ProjectValidationRequest(BaseModel):
 
 
 class ProjectValidationResponse(BaseModel):
-    success: bool
+    valid: bool
     message: str
     project_name: Optional[str] = None
     issues: Optional[List[str]] = None
-
-
 
 
 class ContainerRunRequest(BaseModel):
@@ -197,13 +194,11 @@ async def root():
     }
 
 
-
-
 @app.get("/status", response_model=StatusResponse)
 async def comprehensive_status():
     """
     Get comprehensive status information about the Racer API server.
-    
+
     This endpoint consolidates health, liveness, readiness, and info checks
     into a single comprehensive status report.
     """
@@ -213,14 +208,11 @@ async def comprehensive_status():
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "version": "0.1.0",
-            "service": "racer-api"
+            "service": "racer-api",
         }
-        
-        liveness_data = {
-            "alive": True,
-            "timestamp": datetime.now().isoformat()
-        }
-        
+
+        liveness_data = {"alive": True, "timestamp": datetime.now().isoformat()}
+
         # Check readiness (this is the most complex check)
         readiness_data = {"ready": True, "timestamp": datetime.now().isoformat()}
         try:
@@ -235,26 +227,26 @@ async def comprehensive_status():
                 db_manager = DatabaseManager()
         except Exception as e:
             readiness_data = {
-                "ready": False, 
+                "ready": False,
                 "timestamp": datetime.now().isoformat(),
-                "error": str(e)
+                "error": str(e),
             }
-        
+
         info_data = {
             "service": "Racer API",
             "version": "0.1.0",
             "description": "Rapid deployment system for conda-projects",
             "docs": "/docs",
-            "status": "/status"
+            "status": "/status",
         }
-        
+
         # Determine overall status
         overall_status = "healthy"
         if not readiness_data.get("ready", False):
             overall_status = "degraded"
         if not liveness_data.get("alive", False):
             overall_status = "unhealthy"
-        
+
         return StatusResponse(
             overall_status=overall_status,
             service="racer-api",
@@ -263,9 +255,9 @@ async def comprehensive_status():
             health=health_data,
             liveness=liveness_data,
             readiness=readiness_data,
-            info=info_data
+            info=info_data,
         )
-        
+
     except Exception as e:
         # If we can't even collect basic status, return unhealthy
         return StatusResponse(
@@ -276,7 +268,7 @@ async def comprehensive_status():
             health={"status": "error", "error": str(e)},
             liveness={"alive": False, "error": str(e)},
             readiness={"ready": False, "error": str(e)},
-            info={"error": str(e)}
+            info={"error": str(e)},
         )
 
 
@@ -284,7 +276,7 @@ async def comprehensive_status():
 async def api_info():
     """
     Get API information and available endpoints.
-    
+
     Returns a summary of the API structure and available endpoints for easy discovery.
     """
     return {
@@ -293,8 +285,8 @@ async def api_info():
         "description": "Rapid deployment system for conda-projects",
         "documentation": {
             "swagger_ui": "/docs",
-            "redoc": "/redoc", 
-            "openapi_spec": "/openapi.json"
+            "redoc": "/redoc",
+            "openapi_spec": "/openapi.json",
         },
         "endpoints": {
             "user_facing": {
@@ -302,12 +294,12 @@ async def api_info():
                 "description": "User-facing endpoints (matches `racer` CLI commands)",
                 "endpoints": [
                     "POST /api/v1/deploy - Deploy a conda-project",
-                    "GET /api/v1/projects - List all projects", 
+                    "GET /api/v1/projects - List all projects",
                     "POST /api/v1/status - Get project status",
                     "POST /api/v1/redeploy - Redeploy a project",
                     "POST /api/v1/scale - Scale a project",
-                    "POST /api/v1/validate - Validate a conda-project"
-                ]
+                    "POST /api/v1/validate - Validate a conda-project",
+                ],
             },
             "admin": {
                 "base_path": "/admin/",
@@ -318,8 +310,8 @@ async def api_info():
                     "GET /admin/swarm/services - List swarm services",
                     "GET /admin/swarm/service/{name}/status - Get service status",
                     "GET /admin/swarm/service/{name}/logs - Get service logs",
-                    "DELETE /admin/swarm/service/{name} - Remove service"
-                ]
+                    "DELETE /admin/swarm/service/{name} - Remove service",
+                ],
             },
             "system": {
                 "base_path": "/",
@@ -327,10 +319,10 @@ async def api_info():
                 "endpoints": [
                     "GET / - API root information",
                     "GET /status - Comprehensive status check",
-                    "GET /api/info - This endpoint"
-                ]
-            }
-        }
+                    "GET /api/info - This endpoint",
+                ],
+            },
+        },
     }
 
 
@@ -352,14 +344,14 @@ async def validate_project(request: ProjectValidationRequest):
             result = validate_conda_project(request.project_path)
             if result["valid"]:
                 return ProjectValidationResponse(
-                    success=True,
+                    valid=True,
                     message="Project is valid",
                     project_name=result.get("project_name"),
                     issues=result.get("issues", []),
                 )
             else:
                 return ProjectValidationResponse(
-                    success=False,
+                    valid=False,
                     message="Project validation failed",
                     issues=result.get("issues", []),
                 )
@@ -368,27 +360,25 @@ async def validate_project(request: ProjectValidationRequest):
             result = validate_git_repository(request.git_url)
             if result["valid"]:
                 return ProjectValidationResponse(
-                    success=True,
+                    valid=True,
                     message="Git repository is valid",
                     project_name=result.get("project_name"),
                     issues=result.get("issues", []),
                 )
             else:
                 return ProjectValidationResponse(
-                    success=False,
+                    valid=False,
                     message="Git repository validation failed",
                     issues=result.get("issues", []),
                 )
         else:
             return ProjectValidationResponse(
-                success=False, message="Either project_path or git_url must be provided"
+                valid=False, message="Either project_path or git_url must be provided"
             )
     except Exception as e:
         return ProjectValidationResponse(
-            success=False, message=f"Validation error: {str(e)}"
+            valid=False, message=f"Validation error: {str(e)}"
         )
-
-
 
 
 @app.post("/api/v1/deploy", response_model=ContainerRunResponse)
@@ -428,7 +418,7 @@ async def deploy_project(request: ContainerRunRequest):
 
             # Generate Dockerfile content
             dockerfile_content = generate_dockerfile(project_path)
-            
+
             # Write Dockerfile to file
             dockerfile_path = write_dockerfile(project_path)
 
@@ -473,7 +463,7 @@ async def deploy_project(request: ContainerRunRequest):
 
         # Generate Dockerfile
         dockerfile_path = write_dockerfile(project_path)
-        
+
         # Build the image
         build_result = container_manager.build_image(
             project_path=project_path,
@@ -523,7 +513,7 @@ async def deploy_project(request: ContainerRunRequest):
         )
 
 
-@app.get("/api/v1/projects", response_model=ProjectsListResponse)
+@app.get("/api/v1/projects", response_model=List[Dict[str, Any]])
 async def list_projects():
     """
     List all running projects.
@@ -592,15 +582,10 @@ async def list_projects():
 
             project_list.append(project_info)
 
-        return ProjectsListResponse(
-            success=True,
-            message=f"Found {len(project_list)} projects",
-            projects=project_list,
-        )
+        return project_list
     except Exception as e:
-        return ProjectsListResponse(
-            success=False, message=f"Failed to list projects: {str(e)}", projects=[]
-        )
+        # Return empty list on error
+        return []
 
 
 @app.post("/api/v1/status", response_model=ProjectStatusResponse)
@@ -697,7 +682,7 @@ async def redeploy_project(request: ProjectRerunRequest):
         service_name = f"racer-{project['project_name']}"
         service_status = swarm_manager.get_service_status(service_name)
         is_swarm_service = service_status.get("success", False)
-        
+
         # Parse environment variables
         env_vars = {}
         if request.environment:
@@ -709,14 +694,14 @@ async def redeploy_project(request: ProjectRerunRequest):
         if is_swarm_service:
             # Project is scaled - redeploy as swarm service preserving instance count
             current_instances = service_status.get("replicas", 1)
-            
+
             # Stop existing swarm service
             swarm_manager.remove_service(service_name)
-            
+
             # Stop any individual containers
             if project["container_id"]:
                 container_manager.stop_container(project["container_id"])
-            
+
             # Redeploy as swarm service with same instance count
             # First, we need to build the image
             image_name = f"racer-{request.project_name}:latest"
@@ -725,17 +710,17 @@ async def redeploy_project(request: ProjectRerunRequest):
                 project_path=project.get("project_path"),
                 git_url=project.get("git_url"),
             )
-            
+
             if not build_result.get("success", False):
                 return ProjectRerunResponse(
                     success=False,
                     message=f"Failed to build image for redeploy: {build_result.get('error', 'Unknown error')}",
                 )
-            
+
             # Create the swarm service
             ports = {8000: request.app_port or 8000} if request.app_port else None
             command = request.command.split() if request.command else None
-            
+
             scale_result = swarm_manager.create_service(
                 service_name=service_name,
                 image=image_name,
@@ -744,7 +729,7 @@ async def redeploy_project(request: ProjectRerunRequest):
                 environment=env_vars,
                 command=command,
             )
-            
+
             if scale_result["success"]:
                 return ProjectRerunResponse(
                     success=True,
@@ -864,7 +849,7 @@ async def scale_project(request: ProjectScaleRequest):
 # ============================================================================
 
 
-@app.get("/admin/containers", response_model=Dict[str, Any])
+@app.get("/admin/containers", response_model=List[Dict[str, Any]])
 async def list_containers():
     """
     List all containers (admin endpoint).
@@ -887,17 +872,10 @@ async def list_containers():
                 containers_response if isinstance(containers_response, list) else []
             )
 
-        return {
-            "success": True,
-            "message": f"Found {len(containers)} containers",
-            "containers": containers,
-        }
+        return containers
     except Exception as e:
-        return {
-            "success": False,
-            "message": f"Failed to list containers: {str(e)}",
-            "containers": {},
-        }
+        # Return empty list on error
+        return []
 
 
 @app.get("/admin/containers/{container_id}/status", response_model=Dict[str, Any])
@@ -1032,7 +1010,7 @@ async def cleanup_containers():
         return {"success": False, "message": f"Failed to cleanup containers: {str(e)}"}
 
 
-@app.get("/admin/swarm/services", response_model=Dict[str, Any])
+@app.get("/admin/swarm/services", response_model=List[Dict[str, Any]])
 async def list_swarm_services():
     """
     List all Docker Swarm services (admin endpoint).
@@ -1050,17 +1028,10 @@ async def list_swarm_services():
         else:
             services = services_response if isinstance(services_response, list) else []
 
-        return {
-            "success": True,
-            "message": f"Found {len(services)} swarm services",
-            "services": services,
-        }
+        return services
     except Exception as e:
-        return {
-            "success": False,
-            "message": f"Failed to list swarm services: {str(e)}",
-            "services": {},
-        }
+        # Return empty list on error
+        return []
 
 
 @app.get("/admin/swarm/service/{service_name}/status", response_model=Dict[str, Any])
@@ -1146,8 +1117,6 @@ async def remove_swarm_service(service_name: str):
 # ============================================================================
 # LEGACY ENDPOINTS (for backward compatibility)
 # ============================================================================
-
-
 
 
 @app.post("/containers/run", response_model=ContainerRunResponse)

@@ -52,7 +52,9 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 )
 @click.option("--command", help="Override command to run in container")
 @click.option(
-    "--build-only", is_flag=True, help="Only prepare for building (generate Dockerfile and show build instructions)"
+    "--build-only",
+    is_flag=True,
+    help="Only prepare for building (generate Dockerfile and show build instructions)",
 )
 @click.pass_context
 def deploy(
@@ -108,7 +110,7 @@ def deploy(
         if build_only:
             # Add build_only flag to request
             request_data["build_only"] = True
-        
+
         # Use the unified /api/v1/deploy endpoint for both build-only and full deploy
         response = client._make_request("POST", "/api/v1/deploy", json=request_data)
 
@@ -133,7 +135,9 @@ def deploy(
                         click.echo("\nBuild and run commands:")
                         click.echo(f"  Build: {instructions.get('build', 'N/A')}")
                         click.echo(f"  Run: {instructions.get('run', 'N/A')}")
-                        click.echo(f"  Run (interactive): {instructions.get('run_interactive', 'N/A')}")
+                        click.echo(
+                            f"  Run (interactive): {instructions.get('run_interactive', 'N/A')}"
+                        )
                 else:
                     # Handle full deploy response
                     click.echo(
@@ -162,7 +166,11 @@ def deploy(
                         "Use 'racerctl containers logs <container_id>' to view logs"
                     )
             else:
-                error_msg = "Failed to prepare project for building" if build_only else "Failed to start container"
+                error_msg = (
+                    "Failed to prepare project for building"
+                    if build_only
+                    else "Failed to start container"
+                )
                 click.echo(click.style(f"✗ {error_msg}", fg="red"))
                 click.echo(f"Error: {response.get('message', 'Unknown error')}")
 
@@ -288,8 +296,9 @@ def status(
         # If list flag is set, show all projects
         if list_projects:
             projects_response = client._make_request("GET", "/api/v1/projects")
-            if projects_response.get("success"):
-                projects = projects_response.get("projects", [])
+            # projects_response is now a list directly
+            if isinstance(projects_response, list):
+                projects = projects_response
                 if projects:
                     click.echo("Running projects:")
                     for project in projects:
@@ -297,7 +306,7 @@ def status(
                             f"  • {project['project_name']} (ID: {project['project_id']})"
                         )
                         click.echo(f"    Status: {project['status']}")
-                        click.echo(f"    Ports: {project.get('ports', {})}")
+                        click.echo(f"    Ports: {project.get('host_ports', {})}")
                         click.echo()
                 else:
                     click.echo("No running projects found.")
@@ -308,8 +317,9 @@ def status(
         # Handle project name - show all instances of that project
         if project_name:
             projects_response = client._make_request("GET", "/api/v1/projects")
-            if projects_response.get("success"):
-                projects = projects_response.get("projects", [])
+            # projects_response is now a list directly
+            if isinstance(projects_response, list):
+                projects = projects_response
                 matching_projects = [
                     p for p in projects if p["project_name"] == project_name
                 ]
@@ -347,8 +357,9 @@ def status(
         # If no project name, project ID or container ID provided, list projects and ask user to choose
         if not project_id and not container_id:
             projects_response = client._make_request("GET", "/api/v1/projects")
-            if projects_response.get("success"):
-                projects = projects_response.get("projects", [])
+            # projects_response is now a list directly
+            if isinstance(projects_response, list):
+                projects = projects_response
                 if not projects:
                     click.echo("No running projects found.")
                     click.echo("Use 'racer deploy' to start a project first.")
@@ -446,10 +457,10 @@ def status(
         ctx.exit(1)
 
 
-@cli.command()
+@cli.command(name="list")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
 @click.pass_context
-def list(ctx, verbose: bool):
+def list_projects(ctx, verbose: bool):
     """
     List all running projects.
     """
@@ -462,8 +473,9 @@ def list(ctx, verbose: bool):
         # Get projects list
         projects_response = client._make_request("GET", "/api/v1/projects")
 
-        if projects_response.get("success"):
-            projects = projects_response.get("projects", [])
+        # projects_response is now a list directly
+        if isinstance(projects_response, list):
+            projects = projects_response
 
             if verbose:
                 click.echo("Projects response:")
@@ -692,7 +704,8 @@ def stop(ctx, project_name: str, force: bool):
 
         # Check for individual containers with this project name
         projects_response = client._make_request("GET", "/api/v1/projects")
-        if not projects_response.get("success"):
+        # projects_response is now a list directly
+        if not isinstance(projects_response, list):
             click.echo(click.style("Failed to list projects", fg="red"), err=True)
             ctx.exit(1)
 
@@ -830,8 +843,9 @@ def redeploy(
         # If list flag is set, show all projects
         if list_projects:
             projects_response = client._make_request("GET", "/api/v1/projects")
-            if projects_response.get("success"):
-                projects = projects_response.get("projects", [])
+            # projects_response is now a list directly
+            if isinstance(projects_response, list):
+                projects = projects_response
                 if projects:
                     click.echo("Running projects:")
                     for project in projects:
@@ -839,7 +853,7 @@ def redeploy(
                             f"  • {project['project_name']} (ID: {project['project_id']})"
                         )
                         click.echo(f"    Status: {project['status']}")
-                        click.echo(f"    Ports: {project.get('ports', {})}")
+                        click.echo(f"    Ports: {project.get('host_ports', {})}")
                         click.echo()
                 else:
                     click.echo("No running projects found.")
@@ -849,13 +863,19 @@ def redeploy(
 
         # Validate required parameters
         if not project_name:
-            click.echo(click.style("Error: --project-name is required when not using --list", fg="red"), err=True)
+            click.echo(
+                click.style(
+                    "Error: --project-name is required when not using --list", fg="red"
+                ),
+                err=True,
+            )
             ctx.exit(1)
 
         # Find projects by name
         projects_response = client._make_request("GET", "/api/v1/projects")
-        if projects_response.get("success"):
-            projects = projects_response.get("projects", [])
+        # projects_response is now a list directly
+        if isinstance(projects_response, list):
+            projects = projects_response
             matching_projects = [
                 p for p in projects if p["project_name"] == project_name
             ]
@@ -897,7 +917,6 @@ def redeploy(
                         "project_id": project_id,
                         "no_rebuild": no_rebuild,
                     }
-
 
                     if environment:
                         # Parse environment variables
@@ -948,7 +967,6 @@ def redeploy(
                 "no_rebuild": no_rebuild,
             }
 
-
             if environment:
                 # Parse environment variables
                 env_vars = {}
@@ -962,7 +980,9 @@ def redeploy(
                 request_data["command"] = command
 
             # Make API call
-            response = client._make_request("POST", "/api/v1/redeploy", json=request_data)
+            response = client._make_request(
+                "POST", "/api/v1/redeploy", json=request_data
+            )
 
             if response.get("success"):
                 click.echo(

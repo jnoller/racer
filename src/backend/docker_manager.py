@@ -515,3 +515,7 @@ class ContainerManager:
                 "error": str(e),
                 "message": f"Failed to cleanup containers: {e}",
             }
+
+    def cleanup_containers(self):
+        """Clean up containers (alias for cleanup_stopped_containers)."""
+        return self.cleanup_stopped_containers()

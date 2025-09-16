@@ -59,7 +59,7 @@ def status(ctx, verbose):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        
+
         # Use the unified status endpoint
         status_data = client._make_request("GET", "/status")
 
@@ -81,11 +81,21 @@ def status(ctx, verbose):
             # Overall Status
             overall_status = status_data.get("overall_status", "unknown")
             if overall_status == "healthy":
-                click.echo(click.style("🎉 Overall Status: All systems operational", fg="green", bold=True))
+                click.echo(
+                    click.style(
+                        "🎉 Overall Status: All systems operational",
+                        fg="green",
+                        bold=True,
+                    )
+                )
             elif overall_status == "degraded":
-                click.echo(click.style("⚠️  Overall Status: Degraded", fg="yellow", bold=True))
+                click.echo(
+                    click.style("⚠️  Overall Status: Degraded", fg="yellow", bold=True)
+                )
             else:
-                click.echo(click.style("❌ Overall Status: Unhealthy", fg="red", bold=True))
+                click.echo(
+                    click.style("❌ Overall Status: Unhealthy", fg="red", bold=True)
+                )
             click.echo()
 
             # Individual Status Checks
@@ -123,10 +133,12 @@ def status(ctx, verbose):
             info_data = status_data.get("info", {})
             description = info_data.get("description", "Unknown")
             click.echo(f"Description: {description}")
-            
+
             # Show available endpoints
             endpoints = {
-                k: v for k, v in info_data.items() if k not in ["description", "version"]
+                k: v
+                for k, v in info_data.items()
+                if k not in ["description", "version"]
             }
             if endpoints:
                 click.echo("Available endpoints:")
@@ -443,9 +455,10 @@ def list_containers(ctx):
             click.echo("Containers response:")
             click.echo(json.dumps(response, indent=2))
         else:
-            if response.get("success", False):
-                containers = response.get("containers", [])
-                count = response.get("count", 0)
+            # response is now a list directly
+            if isinstance(response, list):
+                containers = response
+                count = len(containers)
 
                 if count == 0:
                     click.echo("No containers found.")
@@ -759,8 +772,9 @@ def swarm_status(ctx, project_name: str):
             # List all services
             response = client._make_request("GET", "/admin/swarm/services")
 
-            if response.get("success"):
-                services = response.get("services", [])
+            # response is now a list directly
+            if isinstance(response, list):
+                services = response
                 if services:
                     click.echo(click.style("✓ Docker Swarm Services", fg="green"))
                     click.echo()
@@ -781,13 +795,9 @@ def swarm_status(ctx, project_name: str):
                         click.echo()
                 else:
                     click.echo("No Docker Swarm services found.")
-
-                message = response.get("message", "")
-                if message:
-                    click.echo(f"Message: {message}")
             else:
                 click.echo(click.style("✗ Failed to list services", fg="red"))
-                error_msg = response.get("message", "Unknown error")
+                error_msg = "Unknown error"
                 click.echo(f"Error: {error_msg}")
 
     except RacerAPIError as e:

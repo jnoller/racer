@@ -107,6 +107,10 @@ class DatabaseManager:
         finally:
             self.close_session(session)
 
+    def get_project_by_name(self, name: str) -> Optional[Project]:
+        """Get a project by name (convenience method)."""
+        return self.get_project(name=name)
+
     def list_projects(self) -> List[Project]:
         """List all projects."""
         session = self.get_session()
