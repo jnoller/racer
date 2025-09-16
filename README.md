@@ -284,6 +284,16 @@ racerctl swarm remove --project-name "my-app"
 racerctl swarm remove --project-name "my-app" --force
 ```
 
+#### System Cleanup
+
+```bash
+# Clean up all projects, containers, and swarm services
+racerctl cleanup-all
+
+# Force cleanup without confirmation (use with caution!)
+racerctl cleanup-all --force
+```
+
 
 ## API
 
@@ -313,6 +323,7 @@ The backend provides a RESTful API at `http://localhost:8001` with comprehensive
 - `GET /admin/swarm/service/{name}/status` - Get service status
 - `GET /admin/swarm/service/{name}/logs` - Get service logs
 - `DELETE /admin/swarm/service/{name}` - Remove service
+- `POST /admin/cleanup-all` - Clean up all projects, containers, and services
 
 **System endpoints** (`/`):
 - `GET /` - API root information

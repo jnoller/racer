@@ -1189,6 +1189,114 @@ async def remove_swarm_service(service_name: str):
         return {"success": False, "message": f"Failed to remove service: {str(e)}"}
 
 
+@app.post("/admin/cleanup-all")
+async def cleanup_all():
+    """
+    Clean up all projects, containers, and swarm services.
+    
+    This is a comprehensive cleanup that removes:
+    - All Docker containers
+    - All Docker Swarm services
+    - All projects from the database
+    """
+    try:
+        # Initialize managers if needed
+        global container_manager, swarm_manager, db_manager
+        if container_manager is None:
+            container_manager = ContainerManager()
+        if swarm_manager is None:
+            swarm_manager = SwarmManager()
+        if db_manager is None:
+            db_manager = DatabaseManager()
+
+        cleanup_results = {
+            "containers_removed": 0,
+            "services_removed": 0,
+            "projects_deleted": 0,
+            "errors": []
+        }
+
+        # 1. Stop and remove all containers
+        try:
+            containers_response = container_manager.list_containers()
+            if isinstance(containers_response, dict) and "containers" in containers_response:
+                containers = containers_response["containers"]
+            elif isinstance(containers_response, list):
+                containers = containers_response
+            else:
+                containers = []
+                
+            for container in containers:
+                try:
+                    container_id = container.get("id") or container.get("container_id")
+                    if container_id:
+                        container_manager.stop_container(container_id)
+                        container_manager.remove_container(container_id)
+                        cleanup_results["containers_removed"] += 1
+                except Exception as e:
+                    cleanup_results["errors"].append(f"Failed to remove container {container_id}: {str(e)}")
+        except Exception as e:
+            cleanup_results["errors"].append(f"Failed to list containers: {str(e)}")
+
+        # 2. Remove all swarm services
+        try:
+            services_response = swarm_manager.list_services()
+            if isinstance(services_response, dict) and "services" in services_response:
+                services = services_response["services"]
+            elif isinstance(services_response, list):
+                services = services_response
+            else:
+                services = []
+                
+            for service in services:
+                try:
+                    service_name = service.get("name") or service.get("service_name")
+                    if service_name:
+                        swarm_manager.remove_service(service_name)
+                        cleanup_results["services_removed"] += 1
+                except Exception as e:
+                    cleanup_results["errors"].append(f"Failed to remove service {service_name}: {str(e)}")
+        except Exception as e:
+            cleanup_results["errors"].append(f"Failed to list services: {str(e)}")
+
+        # 3. Delete all projects from database
+        try:
+            projects = db_manager.list_projects()
+            for project in projects:
+                try:
+                    db_manager.delete_project(project.id)
+                    cleanup_results["projects_deleted"] += 1
+                except Exception as e:
+                    cleanup_results["errors"].append(f"Failed to delete project {project.name}: {str(e)}")
+        except Exception as e:
+            cleanup_results["errors"].append(f"Failed to list projects: {str(e)}")
+
+        # 4. Clean up any remaining containers
+        try:
+            container_manager.cleanup_containers()
+        except Exception as e:
+            cleanup_results["errors"].append(f"Failed to cleanup containers: {str(e)}")
+
+        success = len(cleanup_results["errors"]) == 0
+        message = f"Cleanup completed: {cleanup_results['containers_removed']} containers, {cleanup_results['services_removed']} services, {cleanup_results['projects_deleted']} projects removed"
+        
+        if cleanup_results["errors"]:
+            message += f". Errors: {len(cleanup_results['errors'])}"
+
+        return {
+            "success": success,
+            "message": message,
+            "details": cleanup_results
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Cleanup failed: {str(e)}",
+            "details": {"errors": [str(e)]}
+        }
+
+
 # ============================================================================
 # LEGACY ENDPOINTS (for backward compatibility)
 # ============================================================================

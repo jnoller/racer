@@ -909,5 +909,73 @@ def swarm_remove(ctx, project_name: str, force: bool):
         ctx.exit(1)
 
 
+@cli.command()
+@click.option("--force", "-f", is_flag=True, help="Force cleanup without confirmation")
+@click.pass_context
+def cleanup_all(ctx, force: bool):
+    """
+    Clean up all projects, containers, and swarm services.
+    
+    This command removes:
+    - All Docker containers
+    - All Docker Swarm services  
+    - All projects from the database
+    
+    Use with caution - this will delete everything!
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    if not force:
+        click.echo(click.style("⚠️  WARNING: This will delete ALL projects, containers, and swarm services!", fg="yellow"))
+        click.echo("This action cannot be undone.")
+        click.echo()
+        if not click.confirm("Are you sure you want to continue?"):
+            click.echo("Cleanup cancelled.")
+            return
+
+    try:
+        client = RacerAPIClient(base_url=api_url, timeout=timeout)
+
+        # Make API request
+        response = client._make_request("POST", "/admin/cleanup-all")
+
+        if verbose:
+            click.echo("Cleanup response:")
+            click.echo(json.dumps(response, indent=2))
+        else:
+            if response.get("success"):
+                click.echo(click.style("✓ Cleanup completed successfully", fg="green"))
+                click.echo(f"Message: {response.get('message', '')}")
+                
+                # Show detailed results
+                details = response.get("details", {})
+                if details:
+                    click.echo("\nCleanup details:")
+                    click.echo(f"  Containers removed: {details.get('containers_removed', 0)}")
+                    click.echo(f"  Services removed: {details.get('services_removed', 0)}")
+                    click.echo(f"  Projects deleted: {details.get('projects_deleted', 0)}")
+                    
+                    errors = details.get("errors", [])
+                    if errors:
+                        click.echo(f"\nErrors encountered ({len(errors)}):")
+                        for error in errors[:5]:  # Show first 5 errors
+                            click.echo(f"  • {error}")
+                        if len(errors) > 5:
+                            click.echo(f"  ... and {len(errors) - 5} more errors")
+            else:
+                click.echo(click.style("✗ Cleanup failed", fg="red"))
+                error_msg = response.get("message", "Unknown error")
+                click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
 if __name__ == "__main__":
     cli()
