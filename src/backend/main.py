@@ -830,14 +830,14 @@ async def scale_project(request: ProjectScaleRequest):
                 success=False, message=f"Project '{request.project_name}' not found"
             )
 
-        service_name = f"racer-{request.project_name}"
+        service_name = f"racer-{project.name}"
         
         # Get current service status
         current_status = swarm_manager.get_service_status(service_name)
         current_instances = current_status.get("replicas", 0) if current_status.get("success") else 0
         
         # Use stored app_port from project if not provided
-        app_port = request.app_port or project.get("app_port", 8000)
+        app_port = request.app_port or getattr(project, "app_port", 8000)
         
         if request.action == "up":
             # Scale up: add instances
@@ -847,15 +847,15 @@ async def scale_project(request: ProjectScaleRequest):
             # If no service exists, create it first
             if current_instances == 0:
                 # Stop existing container if it exists
-                if project["container_id"]:
-                    container_manager.stop_container(project["container_id"])
+                if hasattr(project, 'container_id') and project.container_id:
+                    container_manager.stop_container(project.container_id)
                 
                 # Create new swarm service
                 create_result = swarm_manager.create_service(
                     service_name=service_name,
-                    image=request.project_name,
+                    image=project.image_name,
                     replicas=request.instances,
-                    ports={app_port: app_port} if app_port else None,
+                    ports={str(app_port): app_port} if app_port else None,
                 )
                 
                 if not create_result["success"]:
