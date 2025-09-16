@@ -70,16 +70,6 @@ app = FastAPI(
 # ============================================================================
 
 
-class HealthResponse(BaseModel):
-    status: str
-    timestamp: str
-    version: str
-    service: str
-
-
-class LivenessResponse(BaseModel):
-    alive: bool
-    timestamp: str
 
 
 class StatusResponse(BaseModel):
@@ -203,45 +193,10 @@ async def root():
         "version": "0.1.0",
         "description": "Rapid deployment system for conda-projects",
         "docs": "/docs",
-        "health": "/health",
+        "status": "/status",
     }
 
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint."""
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat(),
-        version="0.1.0",
-        service="racer-api",
-    )
-
-
-@app.get("/liveness", response_model=LivenessResponse)
-async def liveness_check():
-    """Liveness check endpoint."""
-    return LivenessResponse(alive=True, timestamp=datetime.now().isoformat())
-
-
-@app.get("/ready")
-async def readiness_check():
-    """Readiness check endpoint."""
-    # Check if required services are available
-    try:
-        # Initialize managers if not already done
-        global container_manager, swarm_manager, db_manager
-
-        if container_manager is None:
-            container_manager = ContainerManager()
-        if swarm_manager is None:
-            swarm_manager = SwarmManager()
-        if db_manager is None:
-            db_manager = DatabaseManager()
-
-        return {"ready": True, "timestamp": datetime.now().isoformat()}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
 
 
 @app.get("/status", response_model=StatusResponse)
@@ -290,7 +245,7 @@ async def comprehensive_status():
             "version": "0.1.0",
             "description": "Rapid deployment system for conda-projects",
             "docs": "/docs",
-            "health": "/health"
+            "status": "/status"
         }
         
         # Determine overall status
@@ -372,9 +327,6 @@ async def api_info():
                 "endpoints": [
                     "GET / - API root information",
                     "GET /status - Comprehensive status check",
-                    "GET /health - Health check (legacy)",
-                    "GET /liveness - Liveness check (legacy)", 
-                    "GET /ready - Readiness check (legacy)",
                     "GET /api/info - This endpoint"
                 ]
             }
