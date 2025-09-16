@@ -45,166 +45,87 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 
 
 @cli.command()
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.pass_context
-def health(ctx):
+def status(ctx, verbose):
     """
-    Check the health status of the Racer API server.
+    Get comprehensive status information about the Racer API server.
 
-    This command queries the /health endpoint to verify that the API server
-    is running and responding correctly.
+    This command consolidates health, liveness, readiness, and info checks
+    into a single comprehensive status report.
     """
     api_url = ctx.obj["api_url"]
     timeout = ctx.obj["timeout"]
-    verbose = ctx.obj["verbose"]
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
+        
+        # Collect all status information
         health_data = client.health()
-
-        if verbose:
-            click.echo("Health check response:")
-            click.echo(json.dumps(health_data, indent=2))
-        else:
-            # Simple status display
-            status = health_data.get("status", "unknown")
-            service = health_data.get("service", "unknown")
-            version = health_data.get("version", "unknown")
-            timestamp = health_data.get("timestamp", "unknown")
-
-            if status == "healthy":
-                click.echo(
-                    click.style(f"✓ {service} v{version} is healthy", fg="green")
-                )
-                click.echo(f"  Timestamp: {timestamp}")
-            else:
-                click.echo(click.style(f"✗ {service} v{version} is {status}", fg="red"))
-                click.echo(f"  Timestamp: {timestamp}")
-
-    except RacerAPIError as e:
-        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-    except Exception as e:
-        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-
-
-@cli.command()
-@click.pass_context
-def liveness(ctx):
-    """
-    Check the liveness status of the Racer API server.
-
-    This command queries the /liveness endpoint to verify that the API server
-    is alive and should continue running (used by container orchestrators).
-    """
-    api_url = ctx.obj["api_url"]
-    timeout = ctx.obj["timeout"]
-    verbose = ctx.obj["verbose"]
-
-    try:
-        client = RacerAPIClient(base_url=api_url, timeout=timeout)
         liveness_data = client.liveness()
-
-        if verbose:
-            click.echo("Liveness check response:")
-            click.echo(json.dumps(liveness_data, indent=2))
-        else:
-            # Simple status display
-            alive = liveness_data.get("alive", False)
-            uptime = liveness_data.get("uptime", "unknown")
-            timestamp = liveness_data.get("timestamp", "unknown")
-
-            if alive:
-                click.echo(click.style("✓ Server is alive", fg="green"))
-                click.echo(f"  Uptime: {uptime}")
-                click.echo(f"  Timestamp: {timestamp}")
-            else:
-                click.echo(click.style("✗ Server is not alive", fg="red"))
-                click.echo(f"  Timestamp: {timestamp}")
-
-    except RacerAPIError as e:
-        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-    except Exception as e:
-        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-
-
-@cli.command()
-@click.pass_context
-def readiness(ctx):
-    """
-    Check the readiness status of the Racer API server.
-
-    This command queries the /ready endpoint to verify that the API server
-    is ready to accept traffic (checks dependencies like database, Docker, etc.).
-    """
-    api_url = ctx.obj["api_url"]
-    timeout = ctx.obj["timeout"]
-    verbose = ctx.obj["verbose"]
-
-    try:
-        client = RacerAPIClient(base_url=api_url, timeout=timeout)
         readiness_data = client.readiness()
-
-        if verbose:
-            click.echo("Readiness check response:")
-            click.echo(json.dumps(readiness_data, indent=2))
-        else:
-            # Simple status display
-            ready = readiness_data.get("ready", False)
-            checks = readiness_data.get("checks", {})
-            timestamp = readiness_data.get("timestamp", "unknown")
-
-            if ready:
-                click.echo(click.style("✓ Server is ready", fg="green"))
-                click.echo(f"  Timestamp: {timestamp}")
-
-                # Show individual checks
-                if checks:
-                    click.echo("  Dependency checks:")
-                    for check, status in checks.items():
-                        status_icon = "✓" if status == "ok" else "✗"
-                        click.echo(f"    {status_icon} {check}: {status}")
-            else:
-                click.echo(click.style("✗ Server is not ready", fg="red"))
-                click.echo(f"  Timestamp: {timestamp}")
-
-    except RacerAPIError as e:
-        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-    except Exception as e:
-        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-
-
-@cli.command()
-@click.pass_context
-def info(ctx):
-    """
-    Get basic information about the Racer API server.
-
-    This command queries the root endpoint to get API information and
-    available endpoints.
-    """
-    api_url = ctx.obj["api_url"]
-    timeout = ctx.obj["timeout"]
-    verbose = ctx.obj["verbose"]
-
-    try:
-        client = RacerAPIClient(base_url=api_url, timeout=timeout)
         info_data = client.info()
 
         if verbose:
-            click.echo("API information response:")
-            click.echo(json.dumps(info_data, indent=2))
+            click.echo("Complete status response:")
+            click.echo("Health: " + json.dumps(health_data, indent=2))
+            click.echo("Liveness: " + json.dumps(liveness_data, indent=2))
+            click.echo("Readiness: " + json.dumps(readiness_data, indent=2))
+            click.echo("Info: " + json.dumps(info_data, indent=2))
         else:
-            # Simple info display
+            # Comprehensive status display
+            click.echo(click.style("🔍 Racer API Server Status", fg="blue", bold=True))
+            click.echo()
+
+            # Server Information
+            service = health_data.get("service", "unknown")
+            version = health_data.get("version", "unknown")
+            click.echo(f"Service: {service} v{version}")
+            click.echo(f"API URL: {api_url}")
+            click.echo()
+
+            # Health Status
+            health_status = health_data.get("status", "unknown")
+            health_timestamp = health_data.get("timestamp", "unknown")
+            if health_status == "healthy":
+                click.echo(click.style("✓ Health: Healthy", fg="green"))
+            else:
+                click.echo(click.style(f"✗ Health: {health_status}", fg="red"))
+            click.echo(f"  Checked: {health_timestamp}")
+            click.echo()
+
+            # Liveness Status
+            alive = liveness_data.get("alive", False)
+            liveness_timestamp = liveness_data.get("timestamp", "unknown")
+            if alive:
+                click.echo(click.style("✓ Liveness: Alive", fg="green"))
+            else:
+                click.echo(click.style("✗ Liveness: Not alive", fg="red"))
+            click.echo(f"  Checked: {liveness_timestamp}")
+            click.echo()
+
+            # Readiness Status
+            ready = readiness_data.get("ready", False)
+            readiness_timestamp = readiness_data.get("timestamp", "unknown")
+            if ready:
+                click.echo(click.style("✓ Readiness: Ready", fg="green"))
+            else:
+                click.echo(click.style("✗ Readiness: Not ready", fg="red"))
+            click.echo(f"  Checked: {readiness_timestamp}")
+            click.echo()
+
+            # Overall Status Summary
+            all_healthy = (health_status == "healthy" and alive and ready)
+            if all_healthy:
+                click.echo(click.style("🎉 Overall Status: All systems operational", fg="green", bold=True))
+            else:
+                click.echo(click.style("⚠️  Overall Status: Issues detected", fg="yellow", bold=True))
+            click.echo()
+
+            # API Information
             message = info_data.get("message", "Unknown")
-            version = info_data.get("version", "unknown")
-
-            click.echo(click.style(f"{message} v{version}", fg="blue"))
-
+            click.echo(f"Description: {message}")
+            
             # Show available endpoints
             endpoints = {
                 k: v for k, v in info_data.items() if k not in ["message", "version"]
