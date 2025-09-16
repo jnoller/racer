@@ -46,13 +46,20 @@ git clone git@github.com:jnoller/racer.git
 cd racer
 make setup-all
 
-# 2. Start the backend server
+# 2. Activate the environment (choose one option)
+make shell                    # Option A: Interactive shell with environment
+# OR
+make activate                 # Option B: Shows activation instructions  
+# OR
+conda activate racer-dev      # Option C: Manual activation
+
+# 3. Start the backend server
 racerctl server start
 
-# 3. Deploy your first project
+# 4. Deploy your first project
 racer run --project-name "my-app" --path /path/to/your/conda-project
 
-# 4. Check status
+# 5. Check status
 racer status --project-name "my-app"
 ```
 
@@ -321,6 +328,10 @@ make setup-all          # Complete setup: environment, dependencies, database, a
 make setup              # Create base conda environment from base.yaml
 make install-dev        # Create development environment from dev.yaml
 make verify             # Verify that everything is working correctly
+
+# Environment activation
+make activate           # Show activation command and verify environment
+make shell              # Start interactive shell with racer-dev environment activated
 
 # Database management
 make db-init            # Initialize database

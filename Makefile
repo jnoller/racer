@@ -1,7 +1,7 @@
 # Racer - Rapid deployment system for conda-projects
 # Makefile for development and deployment automation
 
-.PHONY: help setup setup-all verify clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset
+.PHONY: help setup setup-all verify clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset activate shell
 
 # Default target
 help:
@@ -24,6 +24,8 @@ help:
 	@echo "  db-init       - Initialize database"
 	@echo "  db-clean      - Clean up database (remove all data)"
 	@echo "  db-reset      - Reset database (drop and recreate)"
+	@echo "  activate      - Show activation command and verify environment"
+	@echo "  shell         - Start a shell with racer-dev environment activated"
 
 # Complete setup: environment, dependencies, database, and verification
 setup-all:
@@ -56,6 +58,11 @@ setup-all:
 	@echo "  2. Start the backend: racerctl server start"
 	@echo "  3. In another terminal, test the CLI: racer --help"
 	@echo "  4. Try running a project: racer run --project-name test --path ./test-project"
+	@echo ""
+	@echo "💡 Quick activation options:"
+	@echo "   Option 1: make shell (starts interactive shell with environment)"
+	@echo "   Option 2: make activate (shows activation instructions)"
+	@echo "   Option 3: conda activate racer-dev (manual activation)"
 	@echo ""
 
 # Setup conda environment and install dependencies
@@ -161,3 +168,37 @@ verify:
 	@$(MAKE) test-quick > /dev/null 2>&1 && echo "✅ Tests are passing" || echo "❌ Tests are failing"
 	@echo ""
 	@echo "🎯 Verification complete!"
+
+# Activate environment and verify it's working
+activate:
+	@echo "🔧 Racer Development Environment Activation"
+	@echo ""
+	@echo "To activate the racer-dev environment, run:"
+	@echo "  conda activate racer-dev"
+	@echo ""
+	@echo "Verifying environment exists..."
+	@conda info --envs | grep -q "racer-dev" && echo "✅ racer-dev environment exists" || echo "❌ racer-dev environment not found - run 'make setup-all' first"
+	@echo ""
+	@echo "Testing CLI in environment..."
+	@conda run -n racer-dev racer --help > /dev/null 2>&1 && echo "✅ CLI is working in racer-dev" || echo "❌ CLI not working - run 'make setup-all' first"
+	@echo ""
+	@echo "💡 After activation, you can:"
+	@echo "  - Start the backend: racerctl server start"
+	@echo "  - Test the CLI: racer --help"
+	@echo "  - Run a project: racer run --project-name test --path ./test-project"
+	@echo ""
+
+# Start a shell with racer-dev environment activated
+shell:
+	@echo "🐚 Starting shell with racer-dev environment activated..."
+	@echo ""
+	@echo "Verifying environment exists..."
+	@conda info --envs | grep -q "racer-dev" && echo "✅ racer-dev environment exists" || (echo "❌ racer-dev environment not found - run 'make setup-all' first" && exit 1)
+	@echo ""
+	@echo "Starting interactive shell with racer-dev environment..."
+	@echo "💡 You can now run racer commands directly!"
+	@echo "   - racerctl server start"
+	@echo "   - racer --help"
+	@echo "   - racer run --project-name test --path ./test-project"
+	@echo ""
+	@conda run -n racer-dev bash
