@@ -193,7 +193,7 @@ racer rerun --list
 racer status --project-name "my-app"
 
 # List all running projects
-racer list-projects
+racer list
 
 # Stop a project (works for both individual containers and swarm services)
 racer stop --project-name "my-app"
@@ -375,7 +375,7 @@ make setup-all
 
 # Check what's running
 racerctl server status
-racer list-projects
+racer list
 ```
 
 ## Contributing

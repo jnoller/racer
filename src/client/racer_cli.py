@@ -542,7 +542,7 @@ def status(
 @cli.command()
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
 @click.pass_context
-def list_projects(ctx, verbose: bool):
+def list(ctx, verbose: bool):
     """
     List all running projects.
     """
