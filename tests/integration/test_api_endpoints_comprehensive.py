@@ -399,26 +399,3 @@ print("Hello from test project!")
         assert "success" in data
         assert data["success"] is False
     
-    # ============================================================================
-    # LEGACY ENDPOINT TESTS (should return 404)
-    # ============================================================================
-    
-    def test_legacy_health_endpoint_removed(self, api_server):
-        """Test that legacy /health endpoint is removed."""
-        response = requests.get("http://localhost:8001/health")
-        assert response.status_code == 404
-    
-    def test_legacy_liveness_endpoint_removed(self, api_server):
-        """Test that legacy /liveness endpoint is removed."""
-        response = requests.get("http://localhost:8001/liveness")
-        assert response.status_code == 404
-    
-    def test_legacy_ready_endpoint_removed(self, api_server):
-        """Test that legacy /ready endpoint is removed."""
-        response = requests.get("http://localhost:8001/ready")
-        assert response.status_code == 404
-    
-    def test_legacy_rerun_endpoint_removed(self, api_server):
-        """Test that legacy /api/v1/rerun endpoint is removed."""
-        response = requests.post("http://localhost:8001/api/v1/rerun", json={})
-        assert response.status_code == 404

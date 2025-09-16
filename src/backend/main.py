@@ -698,7 +698,7 @@ async def redeploy_project(request: ProjectRerunRequest):
             )
 
         # Check if project is currently running as a swarm service
-        service_name = f"racer-{project['project_name']}"
+        service_name = f"racer-{project.name}"
         service_status = swarm_manager.get_service_status(service_name)
         is_swarm_service = service_status.get("success", False)
 
@@ -718,16 +718,16 @@ async def redeploy_project(request: ProjectRerunRequest):
             swarm_manager.remove_service(service_name)
 
             # Stop any individual containers
-            if project["container_id"]:
-                container_manager.stop_container(project["container_id"])
+            if project.container_id:
+                container_manager.stop_container(project.container_id)
 
             # Redeploy as swarm service with same instance count
             # First, we need to build the image
             image_name = f"racer-{request.project_name}:latest"
             build_result = container_manager.build_image(
                 project_name=request.project_name,
-                project_path=project.get("project_path"),
-                git_url=project.get("git_url"),
+                project_path=project.project_path,
+                git_url=project.git_url,
             )
 
             if not build_result.get("success", False):
@@ -755,7 +755,7 @@ async def redeploy_project(request: ProjectRerunRequest):
                     message=f"Scaled project {request.project_name} redeployed with {current_instances} instances",
                     project_name=request.project_name,
                     container_id=None,  # No single container for swarm services
-                    project_id=project["project_id"],  # Keep same project ID
+                    project_id=project.id,  # Keep same project ID
                     host_ports=scale_result.get("host_ports", {}),
                 )
             else:
@@ -765,8 +765,8 @@ async def redeploy_project(request: ProjectRerunRequest):
                 )
         else:
             # Project is single container - redeploy as single container
-            if project["container_id"]:
-                container_manager.stop_container(project["container_id"])
+            if project.container_id:
+                container_manager.stop_container(project.container_id)
 
             # Generate new project ID
             new_project_id = str(uuid.uuid4())
@@ -785,8 +785,8 @@ async def redeploy_project(request: ProjectRerunRequest):
                     project_id=new_project_id,
                     project_name=request.project_name,
                     container_id=run_result["container_id"],
-                    project_path=request.project_path or project.get("project_path"),
-                    git_url=request.git_url or project.get("git_url"),
+                    project_path=request.project_path or project.project_path,
+                    git_url=request.git_url or project.git_url,
                 )
 
                 return ProjectRerunResponse(
@@ -1295,22 +1295,6 @@ async def cleanup_all():
             "message": f"Cleanup failed: {str(e)}",
             "details": {"errors": [str(e)]}
         }
-
-
-# ============================================================================
-# LEGACY ENDPOINTS (for backward compatibility)
-# ============================================================================
-
-
-@app.post("/containers/run", response_model=ContainerRunResponse)
-async def run_container_legacy(request: ContainerRunRequest):
-    """
-    Legacy endpoint for container execution (backward compatibility).
-
-    This endpoint is deprecated. Use /api/v1/deploy instead.
-    """
-    # Redirect to new endpoint
-    return await deploy_project(request)
 
 
 # ============================================================================

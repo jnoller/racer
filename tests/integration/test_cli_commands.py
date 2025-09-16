@@ -190,7 +190,6 @@ print("Hello from test project!")
         result = self.run_cli_command("conda run -n racer-dev racer status --help")
         assert "--project-name" in result.stdout
         assert "--project-id" in result.stdout
-        assert "--container-id" in result.stdout
         assert "--list" in result.stdout
     
     def test_racer_redeploy_help(self):

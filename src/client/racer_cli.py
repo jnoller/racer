@@ -262,17 +262,11 @@ def validate(ctx, project_path: str, git_url: str):
 )
 @click.option("--project-id", "-p", "project_id", help="Project ID to check status for")
 @click.option(
-    "--container-id",
-    "-c",
-    "container_id",
-    help="Container ID to check status for (legacy)",
-)
-@click.option(
     "--list", "list_projects", is_flag=True, help="List all running projects first"
 )
 @click.pass_context
 def status(
-    ctx, project_name: str, project_id: str, container_id: str, list_projects: bool
+    ctx, project_name: str, project_id: str, list_projects: bool
 ):
     """
     Check the status of a running project or list all projects.
@@ -282,10 +276,10 @@ def status(
     verbose = ctx.obj["verbose"]
 
     # Validate that at least one identifier is provided (unless listing all projects)
-    if not list_projects and not project_name and not project_id and not container_id:
+    if not list_projects and not project_name and not project_id:
         click.echo(
             click.style(
-                "Error: At least one of --project-name, --project-id, --container-id, or --list must be specified",
+                "Error: At least one of --project-name, --project-id, or --list must be specified",
                 fg="red",
             ),
             err=True,
@@ -356,8 +350,8 @@ def status(
                 click.echo(click.style("Failed to list projects", fg="red"), err=True)
                 return
 
-        # If no project name, project ID or container ID provided, list projects and ask user to choose
-        if not project_id and not container_id:
+        # If no project name or project ID provided, list projects and ask user to choose
+        if not project_id:
             projects_response = client._make_request("GET", "/api/v1/projects")
             # projects_response is now a list directly
             if isinstance(projects_response, list):
@@ -403,12 +397,9 @@ def status(
                 image = status_response.get("image", "unknown")
 
                 click.echo(f"Container: {container_name}")
-                if container_id:
-                    click.echo(f"ID: {container_id[:12]}")
-                else:
-                    click.echo(
-                        f"ID: {status_response.get('container_id', 'unknown')[:12]}"
-                    )
+                click.echo(
+                    f"ID: {status_response.get('container_id', 'unknown')[:12]}"
+                )
                 click.echo(f"Status: {container_status}")
                 click.echo(f"Image: {image}")
                 click.echo(f"Started: {started_at}")
@@ -925,18 +916,13 @@ def redeploy(
 
                     # Prepare request data for this instance
                     request_data = {
-                        "project_id": project_id,
+                        "project_name": project_name,
                         "no_rebuild": no_rebuild,
                     }
 
                     if environment:
-                        # Parse environment variables
-                        env_vars = {}
-                        for env_var in environment.split(","):
-                            if "=" in env_var:
-                                key, value = env_var.split("=", 1)
-                                env_vars[key.strip()] = value.strip()
-                        request_data["environment"] = env_vars
+                        # Send environment as string (API expects string format)
+                        request_data["environment"] = environment
 
                     if command:
                         request_data["command"] = command
@@ -974,18 +960,13 @@ def redeploy(
 
             # Single instance - prepare request data
             request_data = {
-                "project_id": project_id,
+                "project_name": project_name,
                 "no_rebuild": no_rebuild,
             }
 
             if environment:
-                # Parse environment variables
-                env_vars = {}
-                for env_var in environment.split(","):
-                    if "=" in env_var:
-                        key, value = env_var.split("=", 1)
-                        env_vars[key.strip()] = value.strip()
-                request_data["environment"] = env_vars
+                # Send environment as string (API expects string format)
+                request_data["environment"] = environment
 
             if command:
                 request_data["command"] = command

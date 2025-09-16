@@ -29,7 +29,7 @@ class ContainerManager:
             raise RuntimeError(f"Failed to connect to Docker: {e}")
 
         self.db_manager = db_manager
-        self.running_containers = {}  # Keep for backward compatibility
+        self.running_containers = {}
         self.container_logs = {}
 
     def build_image(
