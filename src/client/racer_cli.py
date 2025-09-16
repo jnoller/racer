@@ -154,8 +154,10 @@ def deploy(
                     elif build_only:
                         instructions = response.get("instructions", {})
                         if instructions:
-                            click.echo("\nBuild command:")
-                            click.echo(f"  {instructions.get('build', 'N/A')}")
+                            click.echo("\nBuild and run commands:")
+                            click.echo(f"  Build: {instructions.get('build', 'N/A')}")
+                            click.echo(f"  Run: {instructions.get('run', 'N/A')}")
+                            click.echo(f"  Run (interactive): {instructions.get('run_interactive', 'N/A')}")
                 else:
                     if dockerfile:
                         click.echo(

@@ -86,6 +86,7 @@ class DockerfileGenerationResponse(BaseModel):
     project_name: Optional[str] = None
     dockerfile_path: Optional[str] = None
     dockerfile_content: Optional[str] = None
+    instructions: Optional[Dict[str, str]] = None
 
 
 class ContainerRunRequest(BaseModel):
@@ -310,12 +311,20 @@ async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
         # Write Dockerfile to file
         dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
 
+        # For backward compatibility, also return build instructions
+        instructions = {
+            "build": f"docker build -t {request.project_name} -f {dockerfile_path} .",
+            "run": f"docker run -p 8000:8000 {request.project_name}",
+            "run_interactive": f"docker run -it -p 8000:8000 {request.project_name} /bin/bash",
+        }
+
         return DockerfileGenerationResponse(
             success=True,
             message="Dockerfile generated successfully",
             project_name=request.project_name,
             dockerfile_path=dockerfile_path,
             dockerfile_content=dockerfile_content,
+            instructions=instructions,
         )
     except Exception as e:
         return DockerfileGenerationResponse(
