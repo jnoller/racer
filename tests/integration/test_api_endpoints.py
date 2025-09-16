@@ -59,7 +59,7 @@ class TestAPIEndpoints:
         
         data = response.json()
         assert data["alive"] is True
-        assert "uptime" in data
+        assert "timestamp" in data
     
     def test_readiness_endpoint(self, api_server):
         """Test readiness endpoint."""
@@ -68,7 +68,7 @@ class TestAPIEndpoints:
         
         data = response.json()
         assert data["ready"] is True
-        assert "checks" in data
+        assert "timestamp" in data
     
     def test_root_endpoint(self, api_server):
         """Test root endpoint."""
@@ -76,7 +76,8 @@ class TestAPIEndpoints:
         assert response.status_code == 200
         
         data = response.json()
-        assert "message" in data
+        assert "service" in data
+        assert "description" in data
         assert "version" in data
     
     def test_validate_endpoint_success(self, api_server):
@@ -107,7 +108,7 @@ variables: {}
 """)
             
             # Test validate endpoint
-            response = requests.post("http://localhost:8001/validate", json={
+            response = requests.post("http://localhost:8001/api/v1/validate", json={
                 "project_path": str(project_dir)
             })
             
@@ -121,7 +122,7 @@ variables: {}
         """Test validate endpoint with invalid project."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Test with empty directory
-            response = requests.post("http://localhost:8001/validate", json={
+            response = requests.post("http://localhost:8001/api/v1/validate", json={
                 "project_path": temp_dir
             })
             
@@ -133,12 +134,11 @@ variables: {}
     
     def test_containers_list_endpoint(self, api_server):
         """Test containers list endpoint."""
-        response = requests.get("http://localhost:8001/containers")
+        response = requests.get("http://localhost:8001/admin/containers")
         assert response.status_code == 200
         
         data = response.json()
-        assert "containers" in data
-        assert "count" in data
+        assert isinstance(data, list)
     
     def test_containers_run_endpoint_missing_data(self, api_server):
         """Test containers run endpoint with missing data."""
@@ -147,7 +147,7 @@ variables: {}
     
     def test_containers_run_endpoint_invalid_path(self, api_server):
         """Test containers run endpoint with invalid path."""
-        response = requests.post("http://localhost:8001/containers/run", json={
+        response = requests.post("http://localhost:8001/api/v1/deploy", json={
             "project_name": "test-project",
             "project_path": "/non/existent/path"
         })
@@ -158,7 +158,7 @@ variables: {}
     
     def test_containers_cleanup_endpoint(self, api_server):
         """Test containers cleanup endpoint."""
-        response = requests.post("http://localhost:8001/containers/cleanup")
+        response = requests.post("http://localhost:8001/admin/containers/cleanup")
         assert response.status_code == 200
         
         data = response.json()
@@ -167,58 +167,56 @@ variables: {}
     
     def test_projects_list_endpoint(self, api_server):
         """Test projects list endpoint."""
-        response = requests.get("http://localhost:8001/projects")
+        response = requests.get("http://localhost:8001/api/v1/projects")
         assert response.status_code == 200
         
         data = response.json()
-        assert "projects" in data
-        assert "count" in data
+        assert isinstance(data, list)
     
     def test_projects_status_endpoint_missing_data(self, api_server):
         """Test projects status endpoint with missing data."""
-        response = requests.get("http://localhost:8001/projects/status")
+        response = requests.get("http://localhost:8001/api/v1/status")
         assert response.status_code == 422  # Validation error
     
     def test_projects_rerun_endpoint_missing_data(self, api_server):
         """Test projects rerun endpoint with missing data."""
-        response = requests.post("http://localhost:8001/projects/rerun", json={})
+        response = requests.post("http://localhost:8001/api/v1/rerun", json={})
         assert response.status_code == 422  # Validation error
     
     def test_projects_scale_endpoint_missing_data(self, api_server):
         """Test projects scale endpoint with missing data."""
-        response = requests.post("http://localhost:8001/projects/scale", json={})
+        response = requests.post("http://localhost:8001/api/v1/scale", json={})
         assert response.status_code == 422  # Validation error
     
     def test_swarm_service_create_endpoint_missing_data(self, api_server):
         """Test swarm service create endpoint with missing data."""
-        response = requests.post("http://localhost:8001/swarm/service/create", json={})
+        response = requests.post("http://localhost:8001/admin/swarm/service/create", json={})
         assert response.status_code == 422  # Validation error
     
     def test_swarm_service_scale_endpoint_missing_data(self, api_server):
         """Test swarm service scale endpoint with missing data."""
-        response = requests.post("http://localhost:8001/swarm/service/scale", json={})
+        response = requests.post("http://localhost:8001/admin/swarm/service/scale", json={})
         assert response.status_code == 422  # Validation error
     
     def test_swarm_service_status_endpoint_missing_data(self, api_server):
         """Test swarm service status endpoint with missing data."""
-        response = requests.get("http://localhost:8001/swarm/service/status")
+        response = requests.get("http://localhost:8001/admin/swarm/service/status")
         assert response.status_code == 422  # Validation error
     
     def test_swarm_service_remove_endpoint_missing_data(self, api_server):
         """Test swarm service remove endpoint with missing data."""
-        response = requests.delete("http://localhost:8001/swarm/service/remove")
+        response = requests.delete("http://localhost:8001/admin/swarm/service/remove")
         assert response.status_code == 422  # Validation error
     
     def test_swarm_services_list_endpoint(self, api_server):
         """Test swarm services list endpoint."""
-        response = requests.get("http://localhost:8001/swarm/services")
+        response = requests.get("http://localhost:8001/admin/swarm/services")
         assert response.status_code == 200
         
         data = response.json()
-        assert "services" in data
-        assert "count" in data
+        assert isinstance(data, list)
     
     def test_swarm_service_logs_endpoint_missing_data(self, api_server):
         """Test swarm service logs endpoint with missing data."""
-        response = requests.get("http://localhost:8001/swarm/service/logs")
+        response = requests.get("http://localhost:8001/admin/swarm/service/logs")
         assert response.status_code == 422  # Validation error
