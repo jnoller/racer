@@ -44,7 +44,11 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
     "-c",
     help="Custom RUN commands to add to Dockerfile (comma-separated)",
 )
-@click.option("--app-port", type=int, help="Port that your application exposes (for load balancing)")
+@click.option(
+    "--app-port",
+    type=int,
+    help="Port that your application exposes (for load balancing)",
+)
 @click.option(
     "--env",
     "-e",
@@ -113,7 +117,9 @@ def deploy(
 
         if build_only:
             # Use the new /api/v1/dockerfile endpoint for build-only
-            response = client._make_request("POST", "/api/v1/dockerfile", json=request_data)
+            response = client._make_request(
+                "POST", "/api/v1/dockerfile", json=request_data
+            )
 
             if verbose:
                 click.echo("Build preparation response:")
@@ -141,9 +147,7 @@ def deploy(
                     )
         else:
             # Use the new /api/v1/deploy endpoint for actual container execution
-            response = client._make_request(
-                "POST", "/api/v1/deploy", json=request_data
-            )
+            response = client._make_request("POST", "/api/v1/deploy", json=request_data)
 
             if verbose:
                 click.echo("Container run response:")
@@ -611,7 +615,11 @@ def list(ctx, verbose: bool):
     "-c",
     help="Custom RUN commands to add to Dockerfile (comma-separated)",
 )
-@click.option("--app-port", type=int, help="Port that your application exposes (for load balancing)")
+@click.option(
+    "--app-port",
+    type=int,
+    help="Port that your application exposes (for load balancing)",
+)
 @click.option(
     "--environment",
     "-e",
@@ -725,20 +733,14 @@ def scale(
         ctx.exit(1)
 
 
-
-
-
-
 @cli.command()
-@click.option(
-    "--project-name", "-n", required=True, help="Name of the project to stop"
-)
+@click.option("--project-name", "-n", required=True, help="Name of the project to stop")
 @click.option("--force", "-f", is_flag=True, help="Force stop without confirmation")
 @click.pass_context
 def stop(ctx, project_name: str, force: bool):
     """
     Stop a running project by name.
-    
+
     This command stops all instances of a project, whether running as individual
     containers or as a Docker Swarm service.
     """
@@ -751,7 +753,9 @@ def stop(ctx, project_name: str, force: bool):
 
         # First, check if it's a swarm service
         try:
-            swarm_response = client._make_request("GET", f"/swarm/service/{project_name}/status")
+            swarm_response = client._make_request(
+                "GET", f"/swarm/service/{project_name}/status"
+            )
             if swarm_response.get("success"):
                 # It's a swarm service, use swarm-remove
                 if not force:
@@ -764,12 +768,15 @@ def stop(ctx, project_name: str, force: bool):
                 if verbose:
                     click.echo(f"Stopping swarm service: {project_name}")
 
-                response = client._make_request("DELETE", f"/swarm/service/{project_name}")
-                
+                response = client._make_request(
+                    "DELETE", f"/swarm/service/{project_name}"
+                )
+
                 if response.get("success"):
                     click.echo(
                         click.style(
-                            f"✓ Swarm service '{project_name}' stopped successfully", fg="green"
+                            f"✓ Swarm service '{project_name}' stopped successfully",
+                            fg="green",
                         )
                     )
                     message = response.get("message", "")
@@ -792,13 +799,17 @@ def stop(ctx, project_name: str, force: bool):
 
         projects = projects_response.get("projects", [])
         matching_containers = [
-            p for p in projects 
-            if p.get("project_name") == project_name and p.get("status") in ["running", "exited"]
+            p
+            for p in projects
+            if p.get("project_name") == project_name
+            and p.get("status") in ["running", "exited"]
         ]
 
         if not matching_containers:
             click.echo(
-                click.style(f"No running project found with name '{project_name}'", fg="yellow")
+                click.style(
+                    f"No running project found with name '{project_name}'", fg="yellow"
+                )
             )
             return
 
@@ -821,38 +832,50 @@ def stop(ctx, project_name: str, force: bool):
                 if verbose:
                     click.echo(f"Stopping container: {container_id}")
 
-                response = client._make_request("POST", f"/containers/{container_id}/stop")
-                
+                response = client._make_request(
+                    "POST", f"/containers/{container_id}/stop"
+                )
+
                 if response.get("success"):
                     stopped_count += 1
                     if verbose:
                         click.echo(f"✓ Container {container_id} stopped")
                 else:
                     click.echo(
-                        click.style(f"✗ Failed to stop container {container_id}", fg="red")
+                        click.style(
+                            f"✗ Failed to stop container {container_id}", fg="red"
+                        )
                     )
                     error_msg = response.get("message", "Unknown error")
                     click.echo(f"Error: {error_msg}")
 
             except RacerAPIError as e:
                 click.echo(
-                    click.style(f"Error stopping container {container_id}: {str(e)}", fg="red")
+                    click.style(
+                        f"Error stopping container {container_id}: {str(e)}", fg="red"
+                    )
                 )
             except Exception as e:
                 click.echo(
-                    click.style(f"Unexpected error stopping container {container_id}: {str(e)}", fg="red")
+                    click.style(
+                        f"Unexpected error stopping container {container_id}: {str(e)}",
+                        fg="red",
+                    )
                 )
 
         if stopped_count > 0:
             click.echo(
                 click.style(
-                    f"✓ Successfully stopped {stopped_count} container(s) for project '{project_name}'", 
-                    fg="green"
+                    f"✓ Successfully stopped {stopped_count} container(s) for project '{project_name}'",
+                    fg="green",
                 )
             )
         else:
             click.echo(
-                click.style(f"✗ No containers were stopped for project '{project_name}'", fg="red")
+                click.style(
+                    f"✗ No containers were stopped for project '{project_name}'",
+                    fg="red",
+                )
             )
             ctx.exit(1)
 
@@ -862,8 +885,6 @@ def stop(ctx, project_name: str, force: bool):
     except Exception as e:
         click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
         ctx.exit(1)
-
-
 
 
 @cli.command()
@@ -985,7 +1006,6 @@ def rerun(
                             cmd.strip() for cmd in custom_commands.split(",")
                         ]
 
-
                     if environment:
                         # Parse environment variables
                         env_vars = {}
@@ -1039,7 +1059,6 @@ def rerun(
                 request_data["custom_commands"] = [
                     cmd.strip() for cmd in custom_commands.split(",")
                 ]
-
 
             if environment:
                 # Parse environment variables

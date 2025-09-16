@@ -591,7 +591,9 @@ def container_status(ctx, container_id: str):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("GET", f"/admin/containers/{container_id}/status")
+        response = client._make_request(
+            "GET", f"/admin/containers/{container_id}/status"
+        )
 
         if verbose:
             click.echo("Container status response:")
@@ -691,7 +693,9 @@ def stop_container(ctx, container_id: str):
 
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
-        response = client._make_request("POST", f"/admin/containers/{container_id}/stop")
+        response = client._make_request(
+            "POST", f"/admin/containers/{container_id}/stop"
+        )
 
         if verbose:
             click.echo("Stop container response:")
@@ -950,7 +954,9 @@ def swarm_remove(ctx, project_name: str, force: bool):
             click.echo(f"Removing service: {project_name}")
 
         # Make API call
-        response = client._make_request("DELETE", f"/admin/swarm/service/{project_name}")
+        response = client._make_request(
+            "DELETE", f"/admin/swarm/service/{project_name}"
+        )
 
         if response.get("success"):
             click.echo(

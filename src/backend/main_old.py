@@ -495,6 +495,7 @@ async def run_container(request: ContainerRunRequest):
         if request.app_port is not None:
             # Use app_port for simplified load balancing - auto-assign host port
             from port_manager import get_random_port, get_service_port_range
+
             try:
                 host_port = get_random_port(*get_service_port_range())
                 ports = {f"{request.app_port}/tcp": host_port}
@@ -1297,6 +1298,7 @@ async def scale_project(request: ProjectScaleRequest):
         if request.app_port is not None:
             # Use app_port for simplified load balancing - auto-assign host port
             from port_manager import get_random_port, get_service_port_range
+
             try:
                 host_port = get_random_port(*get_service_port_range())
                 ports[f"{request.app_port}"] = host_port

@@ -404,54 +404,37 @@ async def list_projects():
             db_manager = DatabaseManager()
 
         # Get projects from database
-        projects = db_manager.list_projects()
+        projects = db_manager.get_all_projects()
 
         # Get container and swarm information
         containers = container_manager.list_containers()
-        swarm_response = swarm_manager.list_services()
-        swarm_services = (
-            swarm_response.get("services", [])
-            if isinstance(swarm_response, dict)
-            else []
-        )
+        swarm_services = swarm_manager.list_services()
 
         # Combine information
         project_list = []
         for project in projects:
             project_info = {
-                "project_id": project.id,
-                "project_name": project.name,
-                "container_id": None,
+                "project_id": project["project_id"],
+                "project_name": project["project_name"],
+                "container_id": project["container_id"],
                 "status": "unknown",
                 "type": "container",
-                "image": project.image_name,
-                "started_at": project.created_at.isoformat()
-                if project.created_at
-                else "unknown",
             }
 
-            # Get containers for this project
-            project_containers = db_manager.get_project_containers(project.name)
-            if project_containers:
-                # Use the most recent container
-                latest_container = project_containers[-1]
-                project_info["container_id"] = latest_container.container_id
-
-                # Check container status
-                if latest_container.container_id in containers:
-                    container_info = containers[latest_container.container_id]
-                    project_info["status"] = container_info["status"]
-                    project_info["host_ports"] = container_info.get("ports", {})
+            # Check container status
+            if project["container_id"] in containers:
+                container_info = containers[project["container_id"]]
+                project_info["status"] = container_info["status"]
+                project_info["host_ports"] = container_info.get("ports", {})
 
             # Check swarm service status
-            service_name = f"racer-{project.name}"
-            for service in swarm_services:
-                if service.get("name") == service_name:
-                    project_info["status"] = service.get("status", "unknown")
-                    project_info["type"] = "swarm"
-                    project_info["instances"] = service.get("instances", 1)
-                    project_info["host_ports"] = service.get("ports", {})
-                    break
+            service_name = f"racer-{project['project_name']}"
+            if service_name in swarm_services:
+                service_info = swarm_services[service_name]
+                project_info["status"] = service_info["status"]
+                project_info["type"] = "swarm"
+                project_info["instances"] = service_info.get("instances", 1)
+                project_info["host_ports"] = service_info.get("ports", {})
 
             project_list.append(project_info)
 
@@ -688,17 +671,7 @@ async def list_containers():
         if container_manager is None:
             container_manager = ContainerManager()
 
-        containers_response = container_manager.list_containers()
-        if (
-            isinstance(containers_response, dict)
-            and "containers" in containers_response
-        ):
-            containers = containers_response["containers"]
-        else:
-            containers = (
-                containers_response if isinstance(containers_response, list) else []
-            )
-
+        containers = container_manager.list_containers()
         return {
             "success": True,
             "message": f"Found {len(containers)} containers",
@@ -856,12 +829,7 @@ async def list_swarm_services():
         if swarm_manager is None:
             swarm_manager = SwarmManager()
 
-        services_response = swarm_manager.list_services()
-        if isinstance(services_response, dict) and "services" in services_response:
-            services = services_response["services"]
-        else:
-            services = services_response if isinstance(services_response, list) else []
-
+        services = swarm_manager.list_services()
         return {
             "success": True,
             "message": f"Found {len(services)} swarm services",
