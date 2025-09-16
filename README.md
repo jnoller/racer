@@ -32,7 +32,7 @@ conda activate racer-dev
 
 # 3. Deploy your first project
 racerctl server start
-racer run --project-name "my-app" --path /path/to/your/conda-project
+racer deploy --project-name "my-app" --path /path/to/your/conda-project
 ```
 
 **Done!** Your conda-project is now running in a Docker container.
@@ -61,7 +61,7 @@ make clean
 racerctl server start
 
 # Deploy your project
-racer run --project-name "my-app" --path ./my-conda-project
+racer deploy --project-name "my-app" --path ./my-conda-project
 ```
 
 ### Fresh Start (if needed)
@@ -115,25 +115,25 @@ racer/
 
 ### User Commands (`racer`)
 
-#### Deploy and Run Projects
+#### Deploy Projects
 
 ```bash
 # Deploy a local project
-racer run --project-name "my-app" --path ./my-project --app-port 8000
+racer deploy --project-name "my-app" --path ./my-project --app-port 8000
 
 # Deploy from Git repository
-racer run --project-name "my-app" --git https://github.com/user/repo.git --app-port 8000
+racer deploy --project-name "my-app" --git https://github.com/user/repo.git --app-port 8000
 
 # Deploy with custom environment variables
-racer run --project-name "my-app" --path ./my-project --app-port 8000 \
+racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
   --environment DEBUG=true,API_KEY=secret123
 
 # Deploy with custom command
-racer run --project-name "my-app" --path ./my-project --app-port 8000 \
+racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
   --command "python app.py --port 8000"
 
 # Deploy with custom build commands
-racer run --project-name "my-app" --path ./my-project --app-port 8000 \
+racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
   --custom-commands "pip install -r requirements.txt,apt-get update"
 ```
 
@@ -304,7 +304,7 @@ Simple port management with automatic load balancing:
 
 ```bash
 # Your app exposes port 8000 - we handle the rest!
-racer run --project-name "my-app" --path ./project --app-port 8000
+racer deploy --project-name "my-app" --path ./project --app-port 8000
 
 # Scale with automatic load balancing
 racer scale --project-name "my-app" --instances 3 --app-port 8000
@@ -339,7 +339,7 @@ make help
 
 ```bash
 # Deploy a project
-racer run --project-name "my-app" --path ./my-project --app-port 8000
+racer deploy --project-name "my-app" --path ./my-project --app-port 8000
 
 # Check status
 racer status --project-name "my-app"

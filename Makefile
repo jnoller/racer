@@ -57,7 +57,7 @@ setup-all:
 	@echo "  1. Activate the environment: conda activate racer-dev"
 	@echo "  2. Start the backend: racerctl server start"
 	@echo "  3. In another terminal, test the CLI: racer --help"
-	@echo "  4. Try running a project: racer run --project-name test --path ./test-project"
+	@echo "  4. Try deploying a project: racer deploy --project-name test --path ./test-project"
 	@echo ""
 	@echo "💡 Quick activation:"
 	@echo "   Run: conda activate racer-dev"
@@ -208,6 +208,6 @@ activate:
 	@echo "💡 After activation, you can:"
 	@echo "  - Start the backend: racerctl server start"
 	@echo "  - Test the CLI: racer --help"
-	@echo "  - Run a project: racer run --project-name test --path ./test-project"
+	@echo "  - Deploy a project: racer deploy --project-name test --path ./test-project"
 	@echo ""
 

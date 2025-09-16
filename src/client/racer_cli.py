@@ -56,7 +56,7 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
     "--build-only", is_flag=True, help="Only build the Docker image, do not run"
 )
 @click.pass_context
-def run(
+def deploy(
     ctx,
     project_name: str,
     project_path: str,
@@ -438,7 +438,7 @@ def status(
                 projects = projects_response.get("projects", [])
                 if not projects:
                     click.echo("No running projects found.")
-                    click.echo("Use 'racer run' to start a project first.")
+                    click.echo("Use 'racer deploy' to start a project first.")
                     return
 
                 if len(projects) == 1:
@@ -576,7 +576,7 @@ def list(ctx, verbose: bool):
                         click.echo()
                 else:
                     click.echo("No running projects found.")
-                    click.echo("Use 'racer run' to start a project first.")
+                    click.echo("Use 'racer deploy' to start a project first.")
         else:
             click.echo(click.style("Failed to list projects", fg="red"), err=True)
             error_msg = projects_response.get("message", "Unknown error")
