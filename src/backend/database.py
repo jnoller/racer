@@ -69,6 +69,7 @@ class DatabaseManager:
         project_path: str = None,
         git_url: str = None,
         image_name: str = None,
+        app_port: int = None,
     ) -> Optional[Project]:
         """Create a new project."""
         session = self.get_session()
@@ -78,6 +79,7 @@ class DatabaseManager:
                 project_path=project_path,
                 git_url=git_url,
                 image_name=image_name or f"{name}:latest",
+                app_port=app_port or 8000,
             )
             session.add(project)
             session.commit()

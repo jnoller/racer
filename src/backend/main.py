@@ -167,6 +167,7 @@ class ProjectRerunResponse(BaseModel):
 class ProjectScaleRequest(BaseModel):
     project_name: str
     instances: int
+    action: str = "up"  # "up" or "down"
     app_port: Optional[int] = None
 
 
@@ -176,6 +177,9 @@ class ProjectScaleResponse(BaseModel):
     project_name: Optional[str] = None
     service_name: Optional[str] = None
     instances: Optional[int] = None
+    added_instances: Optional[int] = None
+    removed_instances: Optional[int] = None
+    total_instances: Optional[int] = None
     host_ports: Optional[Dict[str, int]] = None
 
 
@@ -506,6 +510,7 @@ async def deploy_project(request: ContainerRunRequest):
                 project_path=request.project_path,
                 git_url=request.git_url,
                 image_name=request.project_name,
+                app_port=request.app_port,
             )
 
             return ContainerRunResponse(
@@ -804,9 +809,9 @@ async def redeploy_project(request: ProjectRerunRequest):
 @app.post("/api/v1/scale", response_model=ProjectScaleResponse)
 async def scale_project(request: ProjectScaleRequest):
     """
-    Scale a project to run multiple instances using Docker Swarm.
+    Scale a project up or down using Docker Swarm.
 
-    This endpoint matches: racer scale
+    This endpoint matches: racer scale up/down
     """
     try:
         # Initialize managers if needed
@@ -825,35 +830,91 @@ async def scale_project(request: ProjectScaleRequest):
                 success=False, message=f"Project '{request.project_name}' not found"
             )
 
-        # Stop existing container
-        if project["container_id"]:
-            container_manager.stop_container(project["container_id"])
-
-        # Create swarm service
         service_name = f"racer-{request.project_name}"
-        scale_result = swarm_manager.scale_service(
-            service_name=service_name,
-            project_name=request.project_name,
-            project_path=project.get("project_path"),
-            git_url=project.get("git_url"),
-            instances=request.instances,
-            app_port=request.app_port,
-        )
-
-        if scale_result["success"]:
+        
+        # Get current service status
+        current_status = swarm_manager.get_service_status(service_name)
+        current_instances = current_status.get("replicas", 0) if current_status.get("success") else 0
+        
+        # Use stored app_port from project if not provided
+        app_port = request.app_port or project.get("app_port", 8000)
+        
+        if request.action == "up":
+            # Scale up: add instances
+            target_instances = current_instances + request.instances
+            added_instances = request.instances
+            
+            # If no service exists, create it first
+            if current_instances == 0:
+                # Stop existing container if it exists
+                if project["container_id"]:
+                    container_manager.stop_container(project["container_id"])
+                
+                # Create new swarm service
+                create_result = swarm_manager.create_service(
+                    service_name=service_name,
+                    image=request.project_name,
+                    replicas=request.instances,
+                    ports={app_port: app_port} if app_port else None,
+                )
+                
+                if not create_result["success"]:
+                    return ProjectScaleResponse(
+                        success=False,
+                        message=f"Failed to create service: {create_result.get('error', 'Unknown error')}",
+                    )
+            else:
+                # Scale existing service
+                scale_result = swarm_manager.scale_service(service_name, target_instances)
+                if not scale_result["success"]:
+                    return ProjectScaleResponse(
+                        success=False,
+                        message=f"Failed to scale service: {scale_result.get('error', 'Unknown error')}",
+                    )
+            
             return ProjectScaleResponse(
                 success=True,
-                message=f"Project {request.project_name} scaled to {request.instances} instances",
+                message=f"Project {request.project_name} scaled up by {added_instances} instances",
                 project_name=request.project_name,
                 service_name=service_name,
-                instances=request.instances,
-                host_ports=scale_result.get("host_ports", {}),
+                added_instances=added_instances,
+                total_instances=target_instances,
+            )
+            
+        elif request.action == "down":
+            # Scale down: remove instances
+            if current_instances <= 1:
+                return ProjectScaleResponse(
+                    success=False,
+                    message="Cannot scale down: at least one instance must remain running",
+                )
+            
+            # Calculate how many instances we can actually remove
+            max_removable = current_instances - 1  # Always keep at least 1
+            instances_to_remove = min(request.instances, max_removable)
+            target_instances = current_instances - instances_to_remove
+            
+            scale_result = swarm_manager.scale_service(service_name, target_instances)
+            if not scale_result["success"]:
+                return ProjectScaleResponse(
+                    success=False,
+                    message=f"Failed to scale down service: {scale_result.get('error', 'Unknown error')}",
+                )
+            
+            return ProjectScaleResponse(
+                success=True,
+                message=f"Project {request.project_name} scaled down by {instances_to_remove} instances",
+                project_name=request.project_name,
+                service_name=service_name,
+                removed_instances=instances_to_remove,
+                total_instances=target_instances,
             )
         else:
             return ProjectScaleResponse(
                 success=False,
-                message=f"Failed to scale project: {scale_result.get('error', 'Unknown error')}",
+                message=f"Invalid action '{request.action}'. Must be 'up' or 'down'",
             )
+            
     except Exception as e:
         return ProjectScaleResponse(success=False, message=f"Scale error: {str(e)}")
 

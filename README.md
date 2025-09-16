@@ -136,28 +136,33 @@ racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
 #### Scale Projects
 
 ```bash
-# Scale to multiple instances (creates Docker Swarm service)
-racer scale --project-name "my-app" --instances 3 --app-port 8000
+# Scale up: add instances (uses stored app port from deployment)
+racer scale up --project-name "my-app" --instances 3
 
-# Scale from local project
-racer scale --project-name "my-app" --instances 5 --path ./my-project --app-port 8000
+# Scale up: add one instance (default)
+racer scale up --project-name "my-app"
 
-# Scale from Git repository
-racer scale --project-name "my-app" --instances 3 --git https://github.com/user/repo.git --app-port 8000
+# Scale down: remove instances (always keeps at least 1 running)
+racer scale down --project-name "my-app" --instances 2
 
-# Scale with custom configuration
-racer scale --project-name "my-app" --instances 2 --path ./my-project --app-port 8000 \
-  --environment DEBUG=true --command "python app.py"
+# Scale down: remove one instance (default)
+racer scale down --project-name "my-app"
 ```
 
 #### Dynamic Scaling
 
 ```bash
-# Scale a project to multiple instances
-racer scale --project-name "my-app" --instances 5 --path ./my-project --app-port 8000
+# Scale up by 5 instances
+racer scale up --project-name "my-app" --instances 5
 
-# Scale down by running scale with fewer instances
-racer scale --project-name "my-app" --instances 2 --path ./my-project --app-port 8000
+# Scale down by 3 instances
+racer scale down --project-name "my-app" --instances 3
+
+# Quick scale up by 1
+racer scale up --project-name "my-app"
+
+# Quick scale down by 1
+racer scale down --project-name "my-app"
 ```
 
 #### Redeploy Projects
@@ -211,9 +216,6 @@ racer validate --path ./my-project
 racer validate --git https://github.com/user/repo.git
 
 # Prepare for building (generate Dockerfile and show build instructions)
-racer deploy --project-name "my-project" --path ./my-project --build-only
-
-# Prepare for building
 racer deploy --project-name "my-project" --path ./my-project --build-only
 ```
 
@@ -324,8 +326,8 @@ Simple port management with automatic load balancing:
 # Your app exposes port 8000 - we handle the rest!
 racer deploy --project-name "my-app" --path ./project --app-port 8000
 
-# Scale with automatic load balancing
-racer scale --project-name "my-app" --instances 3 --app-port 8000
+# Scale with automatic load balancing (uses stored app port)
+racer scale up --project-name "my-app" --instances 3
 ```
 
 **How it works:**
@@ -363,7 +365,7 @@ racer deploy --project-name "my-app" --path ./my-project --app-port 8000
 racer status --project-name "my-app"
 
 # Scale up
-racer scale --project-name "my-app" --instances 3 --app-port 8000
+racer scale up --project-name "my-app" --instances 3
 
 # Restart with new config
 racer redeploy --project-name "my-app" --environment DEBUG=true

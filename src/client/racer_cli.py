@@ -99,13 +99,8 @@ def deploy(
             # Use --app-port for simplified load balancing
             request_data["app_port"] = app_port
         if environment:
-            # Parse environment variables
-            env_vars = {}
-            for env_var in environment.split(","):
-                if "=" in env_var:
-                    key, value = env_var.split("=", 1)
-                    env_vars[key] = value
-            request_data["environment"] = env_vars
+            # Send environment as string (API expects string format)
+            request_data["environment"] = environment
         if command:
             request_data["command"] = command
 
@@ -167,10 +162,10 @@ def deploy(
 
                     click.echo(f"\nMessage: {response.get('message', '')}")
                     click.echo(
-                        "\nUse 'racerctl containers list' to see all running containers"
+                        "\nUse 'racer list' to see all running projects"
                     )
                     click.echo(
-                        "Use 'racerctl containers logs <container_id>' to view logs"
+                        f"Use 'racer status --project-name {response.get('project_name', 'PROJECT_NAME')}' to check project status"
                     )
             else:
                 error_msg = (
@@ -516,13 +511,21 @@ def list_projects(ctx, verbose: bool):
         ctx.exit(1)
 
 
-@cli.command()
+@cli.group()
+def scale():
+    """
+    Scale a project up or down.
+    """
+    pass
+
+
+@scale.command()
 @click.option(
     "--project-name",
     "-n",
     "project_name",
     required=True,
-    help="Name for the project (used for container naming)",
+    help="Name of the project to scale up",
 )
 @click.option(
     "--instances",
@@ -530,118 +533,117 @@ def list_projects(ctx, verbose: bool):
     "instances",
     default=1,
     type=int,
-    help="Number of instances to create",
+    help="Number of additional instances to add (default: 1)",
 )
-@click.option(
-    "--path", "-p", "project_path", help="Path to local conda-project directory"
-)
-@click.option(
-    "--git", "-g", "git_url", help="Git repository URL containing conda-project"
-)
-@click.option(
-    "--app-port",
-    type=int,
-    help="Port that your application exposes (for load balancing)",
-)
-@click.option(
-    "--environment",
-    "-e",
-    help="Environment variables (format: KEY=VALUE, comma-separated)",
-)
-@click.option("--command", help="Override the default command to run")
 @click.pass_context
-def scale(
-    ctx,
-    project_name: str,
-    instances: int,
-    project_path: str,
-    git_url: str,
-    app_port: int,
-    environment: str,
-    command: str,
-):
+def up(ctx, project_name: str, instances: int):
     """
-    Scale a project to run multiple instances.
+    Scale a project up by adding instances.
     """
     api_url = ctx.obj["api_url"]
     timeout = max(ctx.obj["timeout"], 120)  # Scale operations need more time
     verbose = ctx.obj["verbose"]
 
-    if not project_path and not git_url:
-        click.echo(
-            click.style("Error: Either --path or --git must be specified", fg="red"),
-            err=True,
-        )
-        ctx.exit(1)
-
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
 
         # Prepare request data
-        request_data = {"project_name": project_name, "instances": instances}
-
-        if project_path:
-            # Convert relative paths to absolute paths to avoid working directory issues
-            import os
-            request_data["project_path"] = os.path.abspath(project_path)
-        if git_url:
-            request_data["git_url"] = git_url
-
-        # Handle port configuration
-        if app_port is not None:
-            # Use --app-port for simplified load balancing
-            request_data["app_port"] = app_port
-
-        if environment:
-            # Parse environment variables
-            env_vars = {}
-            for env_var in environment.split(","):
-                if "=" in env_var:
-                    key, value = env_var.split("=", 1)
-                    env_vars[key.strip()] = value.strip()
-            request_data["environment"] = env_vars
-
-        if command:
-            request_data["command"] = command
+        request_data = {
+            "project_name": project_name,
+            "instances": instances,
+            "action": "up"
+        }
 
         # Make API request
         response = client._make_request("POST", "/api/v1/scale", json=request_data)
 
         if verbose:
-            click.echo("Scale response:")
+            click.echo("Scale up response:")
             click.echo(json.dumps(response, indent=2))
         else:
             if response.get("success"):
                 project_name = response.get("project_name", "unknown")
-                created_instances = response.get("created_instances", 0)
-                requested_instances = response.get("requested_instances", 0)
-                containers = response.get("containers", [])
+                added_instances = response.get("added_instances", 0)
+                total_instances = response.get("total_instances", 0)
 
-                click.echo(click.style("✓ Project scaling successful", fg="green"))
+                click.echo(click.style("✓ Project scaled up successfully", fg="green"))
                 click.echo(f"Project: {project_name}")
-                click.echo(
-                    f"Created: {created_instances}/{requested_instances} instances"
-                )
-
-                if containers:
-                    click.echo("\nContainers created:")
-                    for container in containers:
-                        instance = container.get("instance", "unknown")
-                        container_id = container.get("container_id", "unknown")
-                        container_name = container.get("container_name", "unknown")
-                        container_ports = container.get("ports", {})
-
-                        click.echo(f"  Instance {instance}: {container_name}")
-                        click.echo(f"    ID: {container_id[:12]}")
-                        if container_ports:
-                            click.echo(f"    Ports: {container_ports}")
-                        click.echo()
+                click.echo(f"Added: {added_instances} instances")
+                click.echo(f"Total instances: {total_instances}")
 
                 message = response.get("message", "")
                 if message:
                     click.echo(f"Message: {message}")
             else:
-                click.echo(click.style("✗ Project scaling failed", fg="red"))
+                click.echo(click.style("✗ Project scaling up failed", fg="red"))
+                error_msg = response.get("message", "Unknown error")
+                click.echo(f"Error: {error_msg}")
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
+@scale.command()
+@click.option(
+    "--project-name",
+    "-n",
+    "project_name",
+    required=True,
+    help="Name of the project to scale down",
+)
+@click.option(
+    "--instances",
+    "-i",
+    "instances",
+    default=1,
+    type=int,
+    help="Number of instances to remove (default: 1)",
+)
+@click.pass_context
+def down(ctx, project_name: str, instances: int):
+    """
+    Scale a project down by removing instances.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = max(ctx.obj["timeout"], 120)  # Scale operations need more time
+    verbose = ctx.obj["verbose"]
+
+    try:
+        client = RacerAPIClient(base_url=api_url, timeout=timeout)
+
+        # Prepare request data
+        request_data = {
+            "project_name": project_name,
+            "instances": instances,
+            "action": "down"
+        }
+
+        # Make API request
+        response = client._make_request("POST", "/api/v1/scale", json=request_data)
+
+        if verbose:
+            click.echo("Scale down response:")
+            click.echo(json.dumps(response, indent=2))
+        else:
+            if response.get("success"):
+                project_name = response.get("project_name", "unknown")
+                removed_instances = response.get("removed_instances", 0)
+                total_instances = response.get("total_instances", 0)
+
+                click.echo(click.style("✓ Project scaled down successfully", fg="green"))
+                click.echo(f"Project: {project_name}")
+                click.echo(f"Removed: {removed_instances} instances")
+                click.echo(f"Total instances: {total_instances}")
+
+                message = response.get("message", "")
+                if message:
+                    click.echo(f"Message: {message}")
+            else:
+                click.echo(click.style("✗ Project scaling down failed", fg="red"))
                 error_msg = response.get("message", "Unknown error")
                 click.echo(f"Error: {error_msg}")
 
@@ -718,7 +720,7 @@ def stop(ctx, project_name: str, force: bool):
             click.echo(click.style("Failed to list projects", fg="red"), err=True)
             ctx.exit(1)
 
-        projects = projects_response.get("projects", [])
+        projects = projects_response
         matching_containers = [
             p
             for p in projects

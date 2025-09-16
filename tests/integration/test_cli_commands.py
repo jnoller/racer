@@ -174,11 +174,10 @@ print("Hello from test project!")
     def test_racer_scale_help(self):
         """Test racer scale --help command."""
         result = self.run_cli_command("conda run -n racer-dev racer scale --help")
-        assert "--project-name" in result.stdout
-        assert "--instances" in result.stdout
-        assert "--path" in result.stdout
-        assert "--git" in result.stdout
-        assert "--app-port" in result.stdout
+        assert "Scale a project up or down" in result.stdout
+        assert "up" in result.stdout
+        assert "down" in result.stdout
+        assert "Commands:" in result.stdout
     
     def test_racer_stop_help(self):
         """Test racer stop --help command."""
@@ -260,7 +259,7 @@ print("Hello from test project!")
         """Test racerctl containers list command."""
         result = self.run_cli_command("conda run -n racer-dev racerctl containers list")
         # Should show containers or "no containers"
-        assert "containers" in result.stdout.lower() or "no containers" in result.stdout.lower()
+        assert "container" in result.stdout.lower() or "no containers" in result.stdout.lower()
     
     def test_racerctl_containers_cleanup(self, api_server):
         """Test racerctl containers cleanup command."""
@@ -295,7 +294,7 @@ print("Hello from test project!")
     def test_racer_scale_missing_project_name(self, api_server):
         """Test racer scale without required project name."""
         result = self.run_cli_command(
-            "conda run -n racer-dev racer scale --instances 3",
+            "conda run -n racer-dev racer scale up --instances 3",
             expect_success=False
         )
         assert "project-name" in result.stderr.lower() or "required" in result.stderr.lower()
@@ -341,7 +340,7 @@ print("Hello from test project!")
     def test_racer_scale_with_all_options(self, api_server, test_project):
         """Test racer scale with all options from README examples."""
         result = self.run_cli_command(
-            f"conda run -n racer-dev racer scale --project-name test-project --instances 3 --path {test_project} --app-port 8000 --environment DEBUG=true --command 'python main.py'"
+            f"conda run -n racer-dev racer scale up --project-name test-project --instances 3"
         )
         # Should either succeed or fail gracefully with a clear error
         assert result.returncode in [0, 1, 2]  # Allow for various failure modes

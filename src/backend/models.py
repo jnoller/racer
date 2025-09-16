@@ -28,6 +28,7 @@ class Project(Base):
     project_path = Column(String(500), nullable=True)
     git_url = Column(String(500), nullable=True)
     image_name = Column(String(255), nullable=False)
+    app_port = Column(Integer, nullable=True, default=8000)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
