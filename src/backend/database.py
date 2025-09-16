@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 try:
     from models import Base, Project, Container, ScaleGroup
 except ImportError:
-    from models import Base, Project, Container, ScaleGroup
+    from .models import Base, Project, Container, ScaleGroup
 
 
 class DatabaseManager:

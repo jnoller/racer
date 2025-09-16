@@ -26,7 +26,7 @@ from swarm_manager import SwarmManager
 try:
     from database import DatabaseManager
 except ImportError:
-    from database import DatabaseManager
+    from .database import DatabaseManager
 
 # Create FastAPI application
 app = FastAPI(
