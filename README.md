@@ -113,45 +113,177 @@ racer/
 
 ## CLI Commands
 
-### Essential Commands
+### User Commands (`racer`)
+
+#### Deploy and Run Projects
 
 ```bash
-# Deploy your project
+# Deploy a local project
 racer run --project-name "my-app" --path ./my-project --app-port 8000
 
-# Check status
-racer status --project-name "my-app"
+# Deploy from Git repository
+racer run --project-name "my-app" --git https://github.com/user/repo.git --app-port 8000
 
-# Scale up
-racer scale --project-name "my-app" --instances 3 --app-port 8000
+# Deploy with custom environment variables
+racer run --project-name "my-app" --path ./my-project --app-port 8000 \
+  --environment DEBUG=true,API_KEY=secret123
 
-# Restart with new config
-racer rerun --project-name "my-app" --environment DEBUG=true
+# Deploy with custom command
+racer run --project-name "my-app" --path ./my-project --app-port 8000 \
+  --command "python app.py --port 8000"
 
-# Server management
-racerctl server start    # Start backend
-racerctl server stop     # Stop backend
-racerctl server status   # Check status
+# Deploy with custom build commands
+racer run --project-name "my-app" --path ./my-project --app-port 8000 \
+  --custom-commands "pip install -r requirements.txt,apt-get update"
 ```
 
-### All Commands
+#### Scale Projects
 
 ```bash
-# User commands (racer)
-racer run --project-name "name" --path ./project --app-port 8000
-racer validate --path ./project
-racer dockerfile --path ./project
-racer status --project-name "name"
-racer scale --project-name "name" --instances 3 --app-port 8000
-racer rerun --project-name "name" --environment DEBUG=true
-racer list-projects
-racer stop --project-name "name"
-racer remove --project-name "name"
+# Scale to multiple instances (creates Docker Swarm service)
+racer scale --project-name "my-app" --instances 3 --app-port 8000
 
-# Admin commands (racerctl)
-racerctl server start|stop|status|restart
-racerctl containers list|stop <id>|remove <id>
-racerctl services list|logs <name>|remove <name>
+# Scale from local project
+racer scale --project-name "my-app" --instances 5 --path ./my-project --app-port 8000
+
+# Scale from Git repository
+racer scale --project-name "my-app" --instances 3 --git https://github.com/user/repo.git --app-port 8000
+
+# Scale with custom configuration
+racer scale --project-name "my-app" --instances 2 --path ./my-project --app-port 8000 \
+  --environment DEBUG=true --command "python app.py"
+```
+
+#### Dynamic Scaling (Scale Up/Down)
+
+```bash
+# Scale up existing service
+racer scale-up --project-name "my-app" --instances 5
+
+# Scale down existing service
+racer scale-down --project-name "my-app" --instances 2
+
+# Check service status
+racer swarm-status --project-name "my-app"
+
+# View service logs
+racer swarm-logs --project-name "my-app"
+
+# Remove service
+racer swarm-remove --project-name "my-app"
+```
+
+#### Rerun Projects
+
+```bash
+# Rerun with rebuilt image (includes source changes)
+racer rerun --project-name "my-app"
+
+# Fast restart without rebuilding (configuration changes only)
+racer rerun --project-name "my-app" --no-rebuild
+
+# Rerun with new environment variables
+racer rerun --project-name "my-app" --environment DEBUG=true,LOG_LEVEL=debug
+
+# Rerun with new command
+racer rerun --project-name "my-app" --command "python app.py --debug"
+
+# Rerun with custom build commands
+racer rerun --project-name "my-app" --custom-commands "pip install -r requirements.txt"
+
+# List projects before rerunning
+racer rerun --list
+```
+
+#### Project Management
+
+```bash
+# Check project status
+racer status --project-name "my-app"
+
+# List all running projects
+racer list-projects
+
+# Stop a project
+racer stop --project-name "my-app"
+
+# Remove a project
+racer remove --project-name "my-app"
+```
+
+#### Validation and Utilities
+
+```bash
+# Validate a conda-project
+racer validate --path ./my-project
+
+# Validate from Git repository
+racer validate --git https://github.com/user/repo.git
+
+# Generate Dockerfile
+racer dockerfile --path ./my-project
+
+# Generate Dockerfile with custom commands
+racer dockerfile --path ./my-project --custom-commands "pip install -r requirements.txt"
+```
+
+### Admin Commands (`racerctl`)
+
+#### Server Management
+
+```bash
+# Start backend server (background by default)
+racerctl server start
+
+# Start in foreground mode
+racerctl server start --foreground
+
+# Start on specific port
+racerctl server start --port 8002
+
+# Stop server
+racerctl server stop
+
+# Force stop server
+racerctl server stop --force
+
+# Check server status
+racerctl server status
+
+# Restart server
+racerctl server restart
+```
+
+#### Container Management
+
+```bash
+# List all containers
+racerctl containers list
+
+# View container logs
+racerctl containers logs <container_id>
+
+# Stop container
+racerctl containers stop <container_id>
+
+# Remove container
+racerctl containers remove <container_id>
+
+# Cleanup stopped containers
+racerctl containers cleanup
+```
+
+#### Service Management (Docker Swarm)
+
+```bash
+# List all services
+racerctl services list
+
+# View service logs
+racerctl services logs <service_name>
+
+# Remove service
+racerctl services remove <service_name>
 ```
 
 ## API
