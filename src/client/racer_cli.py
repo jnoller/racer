@@ -106,16 +106,19 @@ def deploy(
             request_data["command"] = command
 
         if build_only:
-            # Use the new /api/v1/dockerfile endpoint for build preparation
-            response = client._make_request(
-                "POST", "/api/v1/dockerfile", json=request_data
-            )
+            # Add build_only flag to request
+            request_data["build_only"] = True
+        
+        # Use the unified /api/v1/deploy endpoint for both build-only and full deploy
+        response = client._make_request("POST", "/api/v1/deploy", json=request_data)
 
-            if verbose:
-                click.echo("Dockerfile generation response:")
-                click.echo(json.dumps(response, indent=2))
-            else:
-                if response.get("success", False):
+        if verbose:
+            click.echo("Deploy response:")
+            click.echo(json.dumps(response, indent=2))
+        else:
+            if response.get("success", False):
+                if build_only:
+                    # Handle build-only response
                     click.echo(
                         click.style("✓ Project prepared for building", fg="green")
                     )
@@ -132,20 +135,7 @@ def deploy(
                         click.echo(f"  Run: {instructions.get('run', 'N/A')}")
                         click.echo(f"  Run (interactive): {instructions.get('run_interactive', 'N/A')}")
                 else:
-                    click.echo(
-                        click.style(
-                            "✗ Failed to prepare project for building", fg="red"
-                        )
-                    )
-        else:
-            # Use the new /api/v1/deploy endpoint for actual container execution
-            response = client._make_request("POST", "/api/v1/deploy", json=request_data)
-
-            if verbose:
-                click.echo("Container run response:")
-                click.echo(json.dumps(response, indent=2))
-            else:
-                if response.get("success", False):
+                    # Handle full deploy response
                     click.echo(
                         click.style("✓ Container started successfully", fg="green")
                     )
@@ -171,9 +161,10 @@ def deploy(
                     click.echo(
                         "Use 'racerctl containers logs <container_id>' to view logs"
                     )
-                else:
-                    click.echo(click.style("✗ Failed to start container", fg="red"))
-                    click.echo(f"Error: {response.get('error', 'Unknown error')}")
+            else:
+                error_msg = "Failed to prepare project for building" if build_only else "Failed to start container"
+                click.echo(click.style(f"✗ {error_msg}", fg="red"))
+                click.echo(f"Error: {response.get('message', 'Unknown error')}")
 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)

@@ -71,21 +71,6 @@ class ProjectValidationResponse(BaseModel):
     issues: Optional[List[str]] = None
 
 
-class DockerfileGenerationRequest(BaseModel):
-    project_name: str
-    project_path: Optional[str] = None
-    git_url: Optional[str] = None
-    environment: Optional[str] = None
-    command: Optional[str] = None
-
-
-class DockerfileGenerationResponse(BaseModel):
-    success: bool
-    message: str
-    project_name: Optional[str] = None
-    dockerfile_path: Optional[str] = None
-    dockerfile_content: Optional[str] = None
-    instructions: Optional[Dict[str, str]] = None
 
 
 class ContainerRunRequest(BaseModel):
@@ -95,6 +80,7 @@ class ContainerRunRequest(BaseModel):
     environment: Optional[str] = None
     command: Optional[str] = None
     app_port: Optional[int] = None
+    build_only: Optional[bool] = False
 
 
 class ContainerRunResponse(BaseModel):
@@ -104,6 +90,10 @@ class ContainerRunResponse(BaseModel):
     container_id: Optional[str] = None
     project_id: Optional[str] = None
     host_ports: Optional[Dict[str, int]] = None
+    # Build-only fields
+    dockerfile_path: Optional[str] = None
+    dockerfile_content: Optional[str] = None
+    instructions: Optional[Dict[str, str]] = None
 
 
 class ProjectsListResponse(BaseModel):
@@ -269,64 +259,6 @@ async def validate_project(request: ProjectValidationRequest):
         )
 
 
-@app.post("/api/v1/dockerfile", response_model=DockerfileGenerationResponse)
-async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
-    """
-    Generate a Dockerfile for a conda-project.
-
-    This endpoint matches: racer dockerfile
-    """
-    try:
-        # Initialize managers if needed
-        global container_manager, db_manager
-        if container_manager is None:
-            container_manager = ContainerManager()
-        if db_manager is None:
-            db_manager = DatabaseManager()
-
-        # Generate project ID
-        project_id = str(uuid.uuid4())
-
-        # Determine project path
-        if request.project_path:
-            project_path = request.project_path
-        elif request.git_url:
-            # For git URLs, we need to clone first - this is a limitation
-            return DockerfileGenerationResponse(
-                success=False,
-                message="Dockerfile generation from git URL not supported in this endpoint. Use deploy instead.",
-            )
-        else:
-            return DockerfileGenerationResponse(
-                success=False,
-                message="Either project_path or git_url must be provided",
-            )
-
-        # Generate Dockerfile content
-        dockerfile_content = generate_dockerfile(project_path)
-        
-        # Write Dockerfile to file
-        dockerfile_path = write_dockerfile(project_path)
-
-        # For backward compatibility, also return build instructions
-        instructions = {
-            "build": f"docker build -t {request.project_name} -f {dockerfile_path} .",
-            "run": f"docker run -p 8000:8000 {request.project_name}",
-            "run_interactive": f"docker run -it -p 8000:8000 {request.project_name} /bin/bash",
-        }
-
-        return DockerfileGenerationResponse(
-            success=True,
-            message="Dockerfile generated successfully",
-            project_name=request.project_name,
-            dockerfile_path=dockerfile_path,
-            dockerfile_content=dockerfile_content,
-            instructions=instructions,
-        )
-    except Exception as e:
-        return DockerfileGenerationResponse(
-            success=False, message=f"Dockerfile generation error: {str(e)}"
-        )
 
 
 @app.post("/api/v1/deploy", response_model=ContainerRunResponse)
@@ -347,6 +279,45 @@ async def deploy_project(request: ContainerRunRequest):
         # Generate project ID
         project_id = str(uuid.uuid4())
 
+        # Handle build-only case
+        if request.build_only:
+            # Determine project path
+            if request.project_path:
+                project_path = request.project_path
+            elif request.git_url:
+                # For git URLs, we need to clone first - this is a limitation
+                return ContainerRunResponse(
+                    success=False,
+                    message="Dockerfile generation from git URL not supported in build-only mode. Use deploy instead.",
+                )
+            else:
+                return ContainerRunResponse(
+                    success=False,
+                    message="Either project_path or git_url must be provided",
+                )
+
+            # Generate Dockerfile content
+            dockerfile_content = generate_dockerfile(project_path)
+            
+            # Write Dockerfile to file
+            dockerfile_path = write_dockerfile(project_path)
+
+            # Return build instructions
+            instructions = {
+                "build": f"docker build -t {request.project_name} -f {dockerfile_path} .",
+                "run": f"docker run -p 8000:8000 {request.project_name}",
+                "run_interactive": f"docker run -it -p 8000:8000 {request.project_name} /bin/bash",
+            }
+
+            return ContainerRunResponse(
+                success=True,
+                message="Project prepared for building",
+                project_name=request.project_name,
+                dockerfile_path=dockerfile_path,
+                dockerfile_content=dockerfile_content,
+                instructions=instructions,
+            )
+
         # Parse environment variables
         env_vars = {}
         if request.environment:
@@ -355,25 +326,52 @@ async def deploy_project(request: ContainerRunRequest):
                     key, value = env_pair.split("=", 1)
                     env_vars[key.strip()] = value.strip()
 
+        # Build the Docker image first
+        if request.project_path:
+            project_path = request.project_path
+        elif request.git_url:
+            # For git URLs, we need to clone first - this is a limitation
+            return ContainerRunResponse(
+                success=False,
+                message="Deployment from git URL not supported. Use local project path instead.",
+            )
+        else:
+            return ContainerRunResponse(
+                success=False,
+                message="Either project_path or git_url must be provided",
+            )
+
+        # Generate Dockerfile
+        dockerfile_path = write_dockerfile(project_path)
+        
+        # Build the image
+        build_result = container_manager.build_image(
+            project_path=project_path,
+            project_name=request.project_name,
+            dockerfile_path=dockerfile_path,
+        )
+
+        if not build_result["success"]:
+            return ContainerRunResponse(
+                success=False,
+                message=f"Failed to build image: {build_result.get('error', 'Unknown error')}",
+            )
+
         # Run container
         run_result = container_manager.run_container(
             project_name=request.project_name,
-            project_path=request.project_path,
-            git_url=request.git_url,
+            ports={8000: request.app_port} if request.app_port else None,
             environment=env_vars,
             command=request.command,
-            app_port=request.app_port,
-            project_id=project_id,
         )
 
         if run_result["success"]:
             # Store in database
-            db_manager.add_project(
-                project_id=project_id,
-                project_name=request.project_name,
-                container_id=run_result["container_id"],
+            db_manager.create_project(
+                name=request.project_name,
                 project_path=request.project_path,
                 git_url=request.git_url,
+                image_name=request.project_name,
             )
 
             return ContainerRunResponse(
@@ -587,12 +585,9 @@ async def rerun_project(request: ProjectRerunRequest):
         # Run new container
         run_result = container_manager.run_container(
             project_name=request.project_name,
-            project_path=request.project_path or project.get("project_path"),
-            git_url=request.git_url or project.get("git_url"),
+            ports={8000: request.app_port} if request.app_port else None,
             environment=env_vars,
             command=request.command,
-            app_port=request.app_port,
-            project_id=new_project_id,
         )
 
         if run_result["success"]:
@@ -968,17 +963,6 @@ async def remove_swarm_service(service_name: str):
 # ============================================================================
 
 
-@app.post("/run")
-async def run_project_legacy(
-    request: DockerfileGenerationRequest, background_tasks: BackgroundTasks
-):
-    """
-    Legacy endpoint for run preparation (backward compatibility).
-
-    This endpoint is deprecated. Use /api/v1/dockerfile instead.
-    """
-    # Redirect to new endpoint
-    return await generate_dockerfile_endpoint(request)
 
 
 @app.post("/containers/run", response_model=ContainerRunResponse)
