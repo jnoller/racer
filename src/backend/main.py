@@ -421,33 +421,18 @@ async def deploy_project(request: ContainerRunRequest):
             # Generate Dockerfile content
             dockerfile_content = generate_dockerfile(project_path)
 
-            # Write Dockerfile to project directory temporarily
-            # Convert to absolute path to avoid working directory issues
-            project_path = os.path.abspath(project_path)
-            dockerfile_path = os.path.join(project_path, "Dockerfile")
-            
-            # Remove existing Dockerfile if it exists
-            if os.path.exists(dockerfile_path):
-                os.remove(dockerfile_path)
-            
-            with open(dockerfile_path, "w") as f:
-                f.write(dockerfile_content)
-
-            # Return build instructions
+            # Return build instructions (no need to write to file for build-only)
             instructions = {
-                "build": f"docker build -t {request.project_name} .",
+                "build": f"docker build -t {request.project_name} -f - .",
                 "run": f"docker run -p 8000:8000 {request.project_name}",
                 "run_interactive": f"docker run -it -p 8000:8000 {request.project_name} /bin/bash",
             }
-
-            # Note: We don't clean up the Dockerfile here for build-only mode
-            # because the user might want to use it for building
 
             return ContainerRunResponse(
                 success=True,
                 message="Project prepared for building",
                 project_name=request.project_name,
-                dockerfile_path=dockerfile_path,
+                dockerfile_path=None,  # No file path for build-only mode
                 dockerfile_content=dockerfile_content,
                 instructions=instructions,
             )

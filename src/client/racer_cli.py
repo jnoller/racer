@@ -127,9 +127,14 @@ def deploy(
                         click.style("✓ Project prepared for building", fg="green")
                     )
                     click.echo(f"Project: {response.get('project_name', 'unknown')}")
-                    click.echo(
-                        f"Dockerfile: {response.get('dockerfile_path', 'unknown')}"
-                    )
+                    
+                    # Display the generated Dockerfile content
+                    dockerfile_content = response.get('dockerfile_content', '')
+                    if dockerfile_content:
+                        click.echo("\nGenerated Dockerfile:")
+                        click.echo("=" * 50)
+                        click.echo(dockerfile_content)
+                        click.echo("=" * 50)
 
                     # Show build instructions
                     instructions = response.get("instructions", {})
