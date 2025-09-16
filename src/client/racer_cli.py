@@ -59,6 +59,9 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 @click.option(
     "--build-only", is_flag=True, help="Only build the Docker image, do not run"
 )
+@click.option(
+    "--dockerfile", is_flag=True, help="Only generate Dockerfile, do not build or run"
+)
 @click.pass_context
 def deploy(
     ctx,
@@ -70,6 +73,7 @@ def deploy(
     environment: str,
     command: str,
     build_only: bool,
+    dockerfile: bool,
 ):
     """
     Run a conda-project by building and running a Docker container.
@@ -115,36 +119,54 @@ def deploy(
         if command:
             request_data["command"] = command
 
-        if build_only:
-            # Use the new /api/v1/dockerfile endpoint for build-only
+        if build_only or dockerfile:
+            # Use the new /api/v1/dockerfile endpoint for build-only or dockerfile generation
             response = client._make_request(
                 "POST", "/api/v1/dockerfile", json=request_data
             )
 
             if verbose:
-                click.echo("Build preparation response:")
+                click.echo("Dockerfile generation response:")
                 click.echo(json.dumps(response, indent=2))
             else:
                 if response.get("success", False):
-                    click.echo(
-                        click.style("✓ Project prepared for building", fg="green")
-                    )
+                    if dockerfile:
+                        click.echo(
+                            click.style("✓ Dockerfile generated successfully", fg="green")
+                        )
+                    else:
+                        click.echo(
+                            click.style("✓ Project prepared for building", fg="green")
+                        )
                     click.echo(f"Project: {response.get('project_name', 'unknown')}")
                     click.echo(
                         f"Dockerfile: {response.get('dockerfile_path', 'unknown')}"
                     )
 
-                    # Show build instructions
-                    instructions = response.get("instructions", {})
-                    if instructions:
-                        click.echo("\nBuild command:")
-                        click.echo(f"  {instructions.get('build', 'N/A')}")
+                    # Show Dockerfile content for dockerfile-only
+                    if dockerfile:
+                        dockerfile_content = response.get("dockerfile_content", "")
+                        if dockerfile_content:
+                            click.echo("\nDockerfile content:")
+                            click.echo("-" * 50)
+                            click.echo(dockerfile_content)
+                    # Show build instructions for build-only, not for dockerfile-only
+                    elif build_only:
+                        instructions = response.get("instructions", {})
+                        if instructions:
+                            click.echo("\nBuild command:")
+                            click.echo(f"  {instructions.get('build', 'N/A')}")
                 else:
-                    click.echo(
-                        click.style(
-                            "✗ Failed to prepare project for building", fg="red"
+                    if dockerfile:
+                        click.echo(
+                            click.style("✗ Failed to generate Dockerfile", fg="red")
                         )
-                    )
+                    else:
+                        click.echo(
+                            click.style(
+                                "✗ Failed to prepare project for building", fg="red"
+                            )
+                        )
         else:
             # Use the new /api/v1/deploy endpoint for actual container execution
             response = client._make_request("POST", "/api/v1/deploy", json=request_data)
@@ -251,80 +273,6 @@ def validate(ctx, project_path: str, git_url: str):
                 errors = response.get("errors", [])
                 for error in errors:
                     click.echo(click.style(f"  ✗ {error}", fg="red"))
-
-    except RacerAPIError as e:
-        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-    except Exception as e:
-        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
-        ctx.exit(1)
-
-
-@cli.command()
-@click.option(
-    "--path", "-p", "project_path", help="Path to local conda-project directory"
-)
-@click.option(
-    "--git", "-g", "git_url", help="Git repository URL containing conda-project"
-)
-@click.option(
-    "--custom-commands",
-    "-c",
-    help="Custom RUN commands to add to Dockerfile (comma-separated)",
-)
-@click.pass_context
-def dockerfile(ctx, project_path: str, git_url: str, custom_commands: str):
-    """
-    Generate a Dockerfile for a conda-project.
-    """
-    api_url = ctx.obj["api_url"]
-    timeout = ctx.obj["timeout"]
-    verbose = ctx.obj["verbose"]
-
-    if not project_path and not git_url:
-        click.echo(
-            click.style("Error: Either --path or --git must be specified", fg="red"),
-            err=True,
-        )
-        ctx.exit(1)
-
-    try:
-        client = RacerAPIClient(base_url=api_url, timeout=timeout)
-
-        # Prepare request data
-        request_data = {}
-        if project_path:
-            request_data["project_path"] = project_path
-        if git_url:
-            request_data["git_url"] = git_url
-        if custom_commands:
-            request_data["custom_commands"] = [
-                cmd.strip() for cmd in custom_commands.split(",")
-            ]
-
-        # Make API request
-        response = client._make_request("POST", "/api/v1/dockerfile", json=request_data)
-
-        if verbose:
-            click.echo("Dockerfile generation response:")
-            click.echo(json.dumps(response, indent=2))
-        else:
-            if response.get("success", False):
-                click.echo(
-                    click.style("✓ Dockerfile generated successfully", fg="green")
-                )
-                click.echo(f"Project: {response.get('project_name', 'unknown')}")
-                click.echo(f"Dockerfile: {response.get('dockerfile_path', 'unknown')}")
-
-                # Show Dockerfile content
-                dockerfile_content = response.get("dockerfile_content", "")
-                if dockerfile_content:
-                    click.echo("\nDockerfile content:")
-                    click.echo("-" * 50)
-                    click.echo(dockerfile_content)
-            else:
-                click.echo(click.style("✗ Failed to generate Dockerfile", fg="red"))
-                click.echo(f"Error: {response.get('error', 'Unknown error')}")
 
     except RacerAPIError as e:
         click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)

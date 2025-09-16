@@ -214,11 +214,11 @@ racer validate --path ./my-project
 # Validate from Git repository
 racer validate --git https://github.com/user/repo.git
 
-# Generate Dockerfile
-racer dockerfile --path ./my-project
+# Generate Dockerfile only
+racer deploy --project-name "my-project" --path ./my-project --dockerfile
 
 # Generate Dockerfile with custom commands
-racer dockerfile --path ./my-project --custom-commands "pip install -r requirements.txt"
+racer deploy --project-name "my-project" --path ./my-project --dockerfile --custom-commands "pip install -r requirements.txt"
 ```
 
 ### Admin Commands (`racerctl`)

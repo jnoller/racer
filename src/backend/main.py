@@ -289,30 +289,34 @@ async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
         # Generate project ID
         project_id = str(uuid.uuid4())
 
-        # Generate Dockerfile
-        result = generate_dockerfile(
-            project_name=request.project_name,
-            project_path=request.project_path,
-            git_url=request.git_url,
-            custom_commands=request.custom_commands,
-            environment=request.environment,
-            command=request.command,
-            project_id=project_id,
-        )
-
-        if result["success"]:
+        # Determine project path
+        if request.project_path:
+            project_path = request.project_path
+        elif request.git_url:
+            # For git URLs, we need to clone first - this is a limitation
             return DockerfileGenerationResponse(
-                success=True,
-                message="Dockerfile generated successfully",
-                project_name=request.project_name,
-                dockerfile_path=result["dockerfile_path"],
-                dockerfile_content=result["dockerfile_content"],
+                success=False,
+                message="Dockerfile generation from git URL not supported in this endpoint. Use deploy instead.",
             )
         else:
             return DockerfileGenerationResponse(
                 success=False,
-                message=f"Failed to generate Dockerfile: {result.get('error', 'Unknown error')}",
+                message="Either project_path or git_url must be provided",
             )
+
+        # Generate Dockerfile content
+        dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
+        
+        # Write Dockerfile to file
+        dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
+
+        return DockerfileGenerationResponse(
+            success=True,
+            message="Dockerfile generated successfully",
+            project_name=request.project_name,
+            dockerfile_path=dockerfile_path,
+            dockerfile_content=dockerfile_content,
+        )
     except Exception as e:
         return DockerfileGenerationResponse(
             success=False, message=f"Dockerfile generation error: {str(e)}"
