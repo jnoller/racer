@@ -204,8 +204,11 @@ racer status --project-name "my-app"
 # List all running projects
 racer list-projects
 
-# Stop a project (use swarm-remove for scaled projects)
-racer swarm-remove --project-name "my-app"
+# Stop a project (works for both individual containers and swarm services)
+racer stop --project-name "my-app"
+
+# Stop without confirmation prompt
+racer stop --project-name "my-app" --force
 
 # Remove a project (admin command)
 racerctl containers remove <container_id>

@@ -1001,6 +1001,141 @@ def swarm_logs(ctx, project_name: str, tail: int):
 
 @cli.command()
 @click.option(
+    "--project-name", "-n", required=True, help="Name of the project to stop"
+)
+@click.option("--force", "-f", is_flag=True, help="Force stop without confirmation")
+@click.pass_context
+def stop(ctx, project_name: str, force: bool):
+    """
+    Stop a running project by name.
+    
+    This command stops all instances of a project, whether running as individual
+    containers or as a Docker Swarm service.
+    """
+    api_url = ctx.obj["api_url"]
+    timeout = ctx.obj["timeout"]
+    verbose = ctx.obj["verbose"]
+
+    try:
+        client = RacerAPIClient(api_url, timeout=timeout, verbose=verbose)
+
+        # First, check if it's a swarm service
+        try:
+            swarm_response = client._make_request("GET", f"/swarm/service/{project_name}/status")
+            if swarm_response.get("success"):
+                # It's a swarm service, use swarm-remove
+                if not force:
+                    if not click.confirm(
+                        f"Are you sure you want to stop swarm service '{project_name}'?"
+                    ):
+                        click.echo("Operation cancelled.")
+                        return
+
+                if verbose:
+                    click.echo(f"Stopping swarm service: {project_name}")
+
+                response = client._make_request("DELETE", f"/swarm/service/{project_name}")
+                
+                if response.get("success"):
+                    click.echo(
+                        click.style(
+                            f"✓ Swarm service '{project_name}' stopped successfully", fg="green"
+                        )
+                    )
+                    message = response.get("message", "")
+                    if message:
+                        click.echo(f"Message: {message}")
+                else:
+                    click.echo(click.style("✗ Failed to stop swarm service", fg="red"))
+                    error_msg = response.get("message", "Unknown error")
+                    click.echo(f"Error: {error_msg}")
+                return
+        except RacerAPIError:
+            # Not a swarm service, continue to check individual containers
+            pass
+
+        # Check for individual containers with this project name
+        projects_response = client._make_request("GET", "/projects")
+        if not projects_response.get("success"):
+            click.echo(click.style("Failed to list projects", fg="red"), err=True)
+            ctx.exit(1)
+
+        projects = projects_response.get("projects", [])
+        matching_containers = [
+            p for p in projects 
+            if p.get("project_name") == project_name and p.get("status") in ["running", "exited"]
+        ]
+
+        if not matching_containers:
+            click.echo(
+                click.style(f"No running project found with name '{project_name}'", fg="yellow")
+            )
+            return
+
+        if not force:
+            container_count = len(matching_containers)
+            if not click.confirm(
+                f"Are you sure you want to stop {container_count} container(s) for project '{project_name}'?"
+            ):
+                click.echo("Operation cancelled.")
+                return
+
+        # Stop all matching containers
+        stopped_count = 0
+        for container in matching_containers:
+            container_id = container.get("container_id")
+            if not container_id:
+                continue
+
+            try:
+                if verbose:
+                    click.echo(f"Stopping container: {container_id}")
+
+                response = client._make_request("POST", f"/containers/{container_id}/stop")
+                
+                if response.get("success"):
+                    stopped_count += 1
+                    if verbose:
+                        click.echo(f"✓ Container {container_id} stopped")
+                else:
+                    click.echo(
+                        click.style(f"✗ Failed to stop container {container_id}", fg="red")
+                    )
+                    error_msg = response.get("message", "Unknown error")
+                    click.echo(f"Error: {error_msg}")
+
+            except RacerAPIError as e:
+                click.echo(
+                    click.style(f"Error stopping container {container_id}: {str(e)}", fg="red")
+                )
+            except Exception as e:
+                click.echo(
+                    click.style(f"Unexpected error stopping container {container_id}: {str(e)}", fg="red")
+                )
+
+        if stopped_count > 0:
+            click.echo(
+                click.style(
+                    f"✓ Successfully stopped {stopped_count} container(s) for project '{project_name}'", 
+                    fg="green"
+                )
+            )
+        else:
+            click.echo(
+                click.style(f"✗ No containers were stopped for project '{project_name}'", fg="red")
+            )
+            ctx.exit(1)
+
+    except RacerAPIError as e:
+        click.echo(click.style(f"Error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(click.style(f"Unexpected error: {str(e)}", fg="red"), err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.option(
     "--project-name", "-n", required=True, help="Name of the project to remove"
 )
 @click.option("--force", "-f", is_flag=True, help="Force removal without confirmation")
