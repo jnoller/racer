@@ -75,7 +75,6 @@ class DockerfileGenerationRequest(BaseModel):
     project_name: str
     project_path: Optional[str] = None
     git_url: Optional[str] = None
-    custom_commands: Optional[str] = None
     environment: Optional[str] = None
     command: Optional[str] = None
 
@@ -93,7 +92,6 @@ class ContainerRunRequest(BaseModel):
     project_name: str
     project_path: Optional[str] = None
     git_url: Optional[str] = None
-    custom_commands: Optional[str] = None
     environment: Optional[str] = None
     command: Optional[str] = None
     app_port: Optional[int] = None
@@ -133,7 +131,6 @@ class ProjectRerunRequest(BaseModel):
     project_name: str
     project_path: Optional[str] = None
     git_url: Optional[str] = None
-    custom_commands: Optional[str] = None
     environment: Optional[str] = None
     command: Optional[str] = None
     app_port: Optional[int] = None
@@ -306,10 +303,10 @@ async def generate_dockerfile_endpoint(request: DockerfileGenerationRequest):
             )
 
         # Generate Dockerfile content
-        dockerfile_content = generate_dockerfile(project_path, request.custom_commands)
+        dockerfile_content = generate_dockerfile(project_path)
         
         # Write Dockerfile to file
-        dockerfile_path = write_dockerfile(project_path, custom_commands=request.custom_commands)
+        dockerfile_path = write_dockerfile(project_path)
 
         # For backward compatibility, also return build instructions
         instructions = {
@@ -363,7 +360,6 @@ async def deploy_project(request: ContainerRunRequest):
             project_name=request.project_name,
             project_path=request.project_path,
             git_url=request.git_url,
-            custom_commands=request.custom_commands,
             environment=env_vars,
             command=request.command,
             app_port=request.app_port,
@@ -593,7 +589,6 @@ async def rerun_project(request: ProjectRerunRequest):
             project_name=request.project_name,
             project_path=request.project_path or project.get("project_path"),
             git_url=request.git_url or project.get("git_url"),
-            custom_commands=request.custom_commands,
             environment=env_vars,
             command=request.command,
             app_port=request.app_port,

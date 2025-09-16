@@ -131,10 +131,6 @@ racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
 # Deploy with custom command
 racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
   --command "python app.py --port 8000"
-
-# Deploy with custom build commands
-racer deploy --project-name "my-app" --path ./my-project --app-port 8000 \
-  --custom-commands "pip install -r requirements.txt,apt-get update"
 ```
 
 #### Scale Projects
@@ -179,8 +175,8 @@ racer rerun --project-name "my-app" --environment DEBUG=true,LOG_LEVEL=debug
 # Rerun with new command
 racer rerun --project-name "my-app" --command "python app.py --debug"
 
-# Rerun with custom build commands
-racer rerun --project-name "my-app" --custom-commands "pip install -r requirements.txt"
+# Rerun a project
+racer rerun --project-name "my-app"
 
 # List projects before rerunning
 racer rerun --list
@@ -217,8 +213,8 @@ racer validate --git https://github.com/user/repo.git
 # Prepare for building (generate Dockerfile and show build instructions)
 racer deploy --project-name "my-project" --path ./my-project --build-only
 
-# Prepare for building with custom commands
-racer deploy --project-name "my-project" --path ./my-project --build-only --custom-commands "pip install -r requirements.txt"
+# Prepare for building
+racer deploy --project-name "my-project" --path ./my-project --build-only
 ```
 
 ### Admin Commands (`racerctl`)

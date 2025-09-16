@@ -40,11 +40,6 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
     "--git", "-g", "git_url", help="Git repository URL containing conda-project"
 )
 @click.option(
-    "--custom-commands",
-    "-c",
-    help="Custom RUN commands to add to Dockerfile (comma-separated)",
-)
-@click.option(
     "--app-port",
     type=int,
     help="Port that your application exposes (for load balancing)",
@@ -65,7 +60,6 @@ def deploy(
     project_name: str,
     project_path: str,
     git_url: str,
-    custom_commands: str,
     app_port: int,
     environment: str,
     command: str,
@@ -96,10 +90,6 @@ def deploy(
             request_data["project_path"] = project_path
         if git_url:
             request_data["git_url"] = git_url
-        if custom_commands:
-            request_data["custom_commands"] = [
-                cmd.strip() for cmd in custom_commands.split(",")
-            ]
         # Handle port configuration
         if app_port is not None:
             # Use --app-port for simplified load balancing
@@ -539,11 +529,6 @@ def list(ctx, verbose: bool):
     "--git", "-g", "git_url", help="Git repository URL containing conda-project"
 )
 @click.option(
-    "--custom-commands",
-    "-c",
-    help="Custom RUN commands to add to Dockerfile (comma-separated)",
-)
-@click.option(
     "--app-port",
     type=int,
     help="Port that your application exposes (for load balancing)",
@@ -561,7 +546,6 @@ def scale(
     instances: int,
     project_path: str,
     git_url: str,
-    custom_commands: str,
     app_port: int,
     environment: str,
     command: str,
@@ -590,10 +574,6 @@ def scale(
             request_data["project_path"] = project_path
         if git_url:
             request_data["git_url"] = git_url
-        if custom_commands:
-            request_data["custom_commands"] = [
-                cmd.strip() for cmd in custom_commands.split(",")
-            ]
 
         # Handle port configuration
         if app_port is not None:
@@ -824,11 +804,6 @@ def stop(ctx, project_name: str, force: bool):
     help="Project name to rerun (will rerun all instances of this project)",
 )
 @click.option(
-    "--custom-commands",
-    "-c",
-    help="Custom RUN commands to add to Dockerfile (comma-separated)",
-)
-@click.option(
     "--environment",
     "-e",
     help="Environment variables (format: KEY=VALUE, comma-separated)",
@@ -847,7 +822,6 @@ def stop(ctx, project_name: str, force: bool):
 def rerun(
     ctx,
     project_name: str,
-    custom_commands: str,
     environment: str,
     command: str,
     no_rebuild: bool,
@@ -929,10 +903,6 @@ def rerun(
                         "no_rebuild": no_rebuild,
                     }
 
-                    if custom_commands:
-                        request_data["custom_commands"] = [
-                            cmd.strip() for cmd in custom_commands.split(",")
-                        ]
 
                     if environment:
                         # Parse environment variables
@@ -983,10 +953,6 @@ def rerun(
                 "no_rebuild": no_rebuild,
             }
 
-            if custom_commands:
-                request_data["custom_commands"] = [
-                    cmd.strip() for cmd in custom_commands.split(",")
-                ]
 
             if environment:
                 # Parse environment variables
