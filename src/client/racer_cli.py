@@ -57,10 +57,7 @@ def cli(ctx, api_url: str, timeout: int, verbose: bool):
 )
 @click.option("--command", help="Override command to run in container")
 @click.option(
-    "--build-only", is_flag=True, help="Only build the Docker image, do not run"
-)
-@click.option(
-    "--dockerfile", is_flag=True, help="Only generate Dockerfile, do not build or run"
+    "--build-only", is_flag=True, help="Only prepare for building (generate Dockerfile and show build instructions)"
 )
 @click.pass_context
 def deploy(
@@ -73,7 +70,6 @@ def deploy(
     environment: str,
     command: str,
     build_only: bool,
-    dockerfile: bool,
 ):
     """
     Run a conda-project by building and running a Docker container.
@@ -119,8 +115,8 @@ def deploy(
         if command:
             request_data["command"] = command
 
-        if build_only or dockerfile:
-            # Use the new /api/v1/dockerfile endpoint for build-only or dockerfile generation
+        if build_only:
+            # Use the new /api/v1/dockerfile endpoint for build preparation
             response = client._make_request(
                 "POST", "/api/v1/dockerfile", json=request_data
             )
@@ -130,45 +126,27 @@ def deploy(
                 click.echo(json.dumps(response, indent=2))
             else:
                 if response.get("success", False):
-                    if dockerfile:
-                        click.echo(
-                            click.style("✓ Dockerfile generated successfully", fg="green")
-                        )
-                    else:
-                        click.echo(
-                            click.style("✓ Project prepared for building", fg="green")
-                        )
+                    click.echo(
+                        click.style("✓ Project prepared for building", fg="green")
+                    )
                     click.echo(f"Project: {response.get('project_name', 'unknown')}")
                     click.echo(
                         f"Dockerfile: {response.get('dockerfile_path', 'unknown')}"
                     )
 
-                    # Show Dockerfile content for dockerfile-only
-                    if dockerfile:
-                        dockerfile_content = response.get("dockerfile_content", "")
-                        if dockerfile_content:
-                            click.echo("\nDockerfile content:")
-                            click.echo("-" * 50)
-                            click.echo(dockerfile_content)
-                    # Show build instructions for build-only, not for dockerfile-only
-                    elif build_only:
-                        instructions = response.get("instructions", {})
-                        if instructions:
-                            click.echo("\nBuild and run commands:")
-                            click.echo(f"  Build: {instructions.get('build', 'N/A')}")
-                            click.echo(f"  Run: {instructions.get('run', 'N/A')}")
-                            click.echo(f"  Run (interactive): {instructions.get('run_interactive', 'N/A')}")
+                    # Show build instructions
+                    instructions = response.get("instructions", {})
+                    if instructions:
+                        click.echo("\nBuild and run commands:")
+                        click.echo(f"  Build: {instructions.get('build', 'N/A')}")
+                        click.echo(f"  Run: {instructions.get('run', 'N/A')}")
+                        click.echo(f"  Run (interactive): {instructions.get('run_interactive', 'N/A')}")
                 else:
-                    if dockerfile:
-                        click.echo(
-                            click.style("✗ Failed to generate Dockerfile", fg="red")
+                    click.echo(
+                        click.style(
+                            "✗ Failed to prepare project for building", fg="red"
                         )
-                    else:
-                        click.echo(
-                            click.style(
-                                "✗ Failed to prepare project for building", fg="red"
-                            )
-                        )
+                    )
         else:
             # Use the new /api/v1/deploy endpoint for actual container execution
             response = client._make_request("POST", "/api/v1/deploy", json=request_data)
