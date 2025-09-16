@@ -693,17 +693,11 @@ async def redeploy_project(request: ProjectRerunRequest):
                 success=False, message=f"Project '{request.project_name}' not found"
             )
 
-        # Stop existing container/service
-        if project["container_id"]:
-            container_manager.stop_container(project["container_id"])
-
-        # Stop swarm service if it exists
+        # Check if project is currently running as a swarm service
         service_name = f"racer-{project['project_name']}"
-        swarm_manager.remove_service(service_name)
-
-        # Generate new project ID
-        new_project_id = str(uuid.uuid4())
-
+        service_status = swarm_manager.get_service_status(service_name)
+        is_swarm_service = service_status.get("success", False)
+        
         # Parse environment variables
         env_vars = {}
         if request.environment:
@@ -712,37 +706,98 @@ async def redeploy_project(request: ProjectRerunRequest):
                     key, value = env_pair.split("=", 1)
                     env_vars[key.strip()] = value.strip()
 
-        # Run new container
-        run_result = container_manager.run_container(
-            project_name=request.project_name,
-            ports={8000: request.app_port} if request.app_port else None,
-            environment=env_vars,
-            command=request.command,
-        )
-
-        if run_result["success"]:
-            # Update database
-            db_manager.update_project(
-                project_id=new_project_id,
+        if is_swarm_service:
+            # Project is scaled - redeploy as swarm service preserving instance count
+            current_instances = service_status.get("replicas", 1)
+            
+            # Stop existing swarm service
+            swarm_manager.remove_service(service_name)
+            
+            # Stop any individual containers
+            if project["container_id"]:
+                container_manager.stop_container(project["container_id"])
+            
+            # Redeploy as swarm service with same instance count
+            # First, we need to build the image
+            image_name = f"racer-{request.project_name}:latest"
+            build_result = container_manager.build_image(
                 project_name=request.project_name,
-                container_id=run_result["container_id"],
-                project_path=request.project_path or project.get("project_path"),
-                git_url=request.git_url or project.get("git_url"),
+                project_path=project.get("project_path"),
+                git_url=project.get("git_url"),
             )
-
-            return ProjectRerunResponse(
-                success=True,
-                message=f"Project {request.project_name} rerun successfully",
-                project_name=request.project_name,
-                container_id=run_result["container_id"],
-                project_id=new_project_id,
-                host_ports=run_result.get("host_ports", {}),
+            
+            if not build_result.get("success", False):
+                return ProjectRerunResponse(
+                    success=False,
+                    message=f"Failed to build image for redeploy: {build_result.get('error', 'Unknown error')}",
+                )
+            
+            # Create the swarm service
+            ports = {8000: request.app_port or 8000} if request.app_port else None
+            command = request.command.split() if request.command else None
+            
+            scale_result = swarm_manager.create_service(
+                service_name=service_name,
+                image=image_name,
+                replicas=current_instances,
+                ports=ports,
+                environment=env_vars,
+                command=command,
             )
+            
+            if scale_result["success"]:
+                return ProjectRerunResponse(
+                    success=True,
+                    message=f"Scaled project {request.project_name} redeployed with {current_instances} instances",
+                    project_name=request.project_name,
+                    container_id=None,  # No single container for swarm services
+                    project_id=project["project_id"],  # Keep same project ID
+                    host_ports=scale_result.get("host_ports", {}),
+                )
+            else:
+                return ProjectRerunResponse(
+                    success=False,
+                    message=f"Failed to redeploy scaled project: {scale_result.get('error', 'Unknown error')}",
+                )
         else:
-            return ProjectRerunResponse(
-                success=False,
-                message=f"Failed to rerun project: {run_result.get('error', 'Unknown error')}",
+            # Project is single container - redeploy as single container
+            if project["container_id"]:
+                container_manager.stop_container(project["container_id"])
+
+            # Generate new project ID
+            new_project_id = str(uuid.uuid4())
+
+            # Run new container
+            run_result = container_manager.run_container(
+                project_name=request.project_name,
+                ports={8000: request.app_port} if request.app_port else None,
+                environment=env_vars,
+                command=request.command,
             )
+
+            if run_result["success"]:
+                # Update database
+                db_manager.update_project(
+                    project_id=new_project_id,
+                    project_name=request.project_name,
+                    container_id=run_result["container_id"],
+                    project_path=request.project_path or project.get("project_path"),
+                    git_url=request.git_url or project.get("git_url"),
+                )
+
+                return ProjectRerunResponse(
+                    success=True,
+                    message=f"Project {request.project_name} redeployed successfully",
+                    project_name=request.project_name,
+                    container_id=run_result["container_id"],
+                    project_id=new_project_id,
+                    host_ports=run_result.get("host_ports", {}),
+                )
+            else:
+                return ProjectRerunResponse(
+                    success=False,
+                    message=f"Failed to redeploy project: {run_result.get('error', 'Unknown error')}",
+                )
     except Exception as e:
         return ProjectRerunResponse(success=False, message=f"Rerun error: {str(e)}")
 

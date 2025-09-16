@@ -913,7 +913,7 @@ def redeploy(
 
                     # Make API request for this instance
                     response = client._make_request(
-                        "POST", "/project/rerun", json=request_data
+                        "POST", "/api/v1/redeploy", json=request_data
                     )
 
                     if response.get("success"):
