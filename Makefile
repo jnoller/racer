@@ -1,7 +1,7 @@
 # Racer - Rapid deployment system for conda-projects
 # Makefile for development and deployment automation
 
-.PHONY: help setup setup-all verify clean install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset activate shell
+.PHONY: help setup setup-all verify clean clean-all install-dev test test-unit test-integration test-docker test-api test-coverage test-quick lint format db-init db-clean db-reset activate shell
 
 # Default target
 help:
@@ -10,7 +10,8 @@ help:
 	@echo "  setup         - Create conda environment and install dependencies"
 	@echo "  install-dev   - Install development dependencies"
 	@echo "  verify        - Verify that everything is working correctly"
-	@echo "  clean         - Remove conda environment"
+	@echo "  clean         - Clean generated files, database, and build artifacts (preserve environment)"
+	@echo "  clean-all     - Remove everything including conda environments (nuclear option)"
 	@echo "  test          - Run all tests"
 	@echo "  test-unit     - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
@@ -32,10 +33,8 @@ setup-all:
 	@echo "🚀 Starting complete Racer setup..."
 	@echo ""
 	@echo "Step 1/6: Cleaning up any existing environments..."
-	@conda env remove -n racer -y 2>/dev/null || true
-	@conda env remove -n racer-dev -y 2>/dev/null || true
-	@conda env remove -n racer-prod -y 2>/dev/null || true
-	@echo "✅ Environments cleaned up"
+	@$(MAKE) clean-all
+	@echo "✅ Complete cleanup finished"
 	@echo ""
 	@echo "Step 2/6: Creating development environment..."
 	@$(MAKE) install-dev
@@ -81,13 +80,38 @@ install-dev:
 	conda run -n racer-dev pip install -e src/client/
 	@echo "Development setup complete! Activate with: conda activate racer-dev"
 
-# Clean up conda environments
+# Clean generated files, database, and build artifacts (preserve environment)
 clean:
+	@echo "🧹 Cleaning generated files and build artifacts..."
+	@echo ""
+	@echo "Cleaning database..."
+	@$(MAKE) db-clean
+	@echo ""
+	@echo "Cleaning Python cache files..."
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	@echo ""
+	@echo "Cleaning test artifacts..."
+	@rm -rf .pytest_cache/ 2>/dev/null || true
+	@rm -rf htmlcov/ 2>/dev/null || true
+	@rm -rf .coverage 2>/dev/null || true
+	@echo ""
+	@echo "Cleaning Docker artifacts..."
+	@docker system prune -f > /dev/null 2>&1 || true
+	@echo ""
+	@echo "✅ Clean complete! Environment preserved."
+
+# Remove everything including conda environments (nuclear option)
+clean-all: clean
+	@echo "💥 Nuclear clean: Removing conda environments..."
+	@echo ""
 	@echo "Removing conda environments..."
-	conda env remove -n racer -y 2>/dev/null || true
-	conda env remove -n racer-dev -y 2>/dev/null || true
-	conda env remove -n racer-prod -y 2>/dev/null || true
-	@echo "Environments removed."
+	@conda env remove -n racer -y 2>/dev/null || true
+	@conda env remove -n racer-dev -y 2>/dev/null || true
+	@conda env remove -n racer-prod -y 2>/dev/null || true
+	@echo ""
+	@echo "✅ Clean-all complete! Everything removed."
 
 # Run tests
 test:

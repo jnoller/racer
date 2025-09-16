@@ -333,6 +333,14 @@ make verify             # Verify that everything is working correctly
 make activate           # Show activation command and verify environment
 make shell              # Start interactive shell with racer-dev environment activated
 
+# Cleanup
+make clean              # Clean generated files, database, and build artifacts (preserve environment)
+make clean-all          # Remove everything including conda environments (nuclear option)
+
+**Clean vs Clean-All:**
+- **`make clean`**: Removes generated files, database data, Python cache, test artifacts, and Docker containers. **Preserves your conda environment** - perfect for regular development cleanup.
+- **`make clean-all`**: Does everything `clean` does PLUS removes all conda environments. **Nuclear option** - use when you want to start completely fresh.
+
 # Database management
 make db-init            # Initialize database
 make db-clean           # Clean up database (remove all data)
