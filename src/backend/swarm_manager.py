@@ -370,11 +370,15 @@ class SwarmManager:
                             ports[f"{port['TargetPort']}/tcp"] = port["PublishedPort"]
 
                     service_info = {
+                        "name": service.name,  # Use 'name' instead of 'service_name' for consistency
                         "service_name": service.name,
                         "service_id": service.id,
                         "replicas": service.attrs["Spec"]["Mode"]["Replicated"][
                             "Replicas"
                         ],
+                        "instances": service.attrs["Spec"]["Mode"]["Replicated"][
+                            "Replicas"
+                        ],  # Add instances field for compatibility
                         "running_replicas": len(running_tasks),
                         "status": "running" if len(running_tasks) > 0 else "stopped",
                         "ports": ports,

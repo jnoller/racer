@@ -564,42 +564,64 @@ async def list_projects():
         # Combine information
         project_list = []
         for project in projects:
-            project_info = {
-                "project_id": project.id,
-                "project_name": project.name,
-                "container_id": None,
-                "status": "unknown",
-                "type": "container",
-                "image": project.image_name,
-                "started_at": project.created_at.isoformat()
-                if project.created_at
-                else "unknown",
-            }
-
-            # Get containers for this project
-            project_containers = db_manager.get_project_containers(project.name)
-            if project_containers:
-                # Use the most recent container
-                latest_container = project_containers[-1]
-                project_info["container_id"] = latest_container.container_id
-
-                # Check container status
-                if latest_container.container_id in containers:
-                    container_info = containers[latest_container.container_id]
-                    project_info["status"] = container_info["status"]
-                    project_info["host_ports"] = container_info.get("ports", {})
-
-            # Check swarm service status
+            # Check if this project has a swarm service
             service_name = f"racer-{project.name}"
+            swarm_service = None
             for service in swarm_services:
                 if service.get("name") == service_name:
-                    project_info["status"] = service.get("status", "unknown")
-                    project_info["type"] = "swarm"
-                    project_info["instances"] = service.get("instances", 1)
-                    project_info["host_ports"] = service.get("ports", {})
+                    swarm_service = service
                     break
 
-            project_list.append(project_info)
+            if swarm_service:
+                # For swarm services, create one entry per instance
+                instances = swarm_service.get("instances", 1)
+                for i in range(instances):
+                    project_info = {
+                        "project_id": project.id,
+                        "project_name": project.name,
+                        "container_id": f"{service_name}-{i+1}",  # Generate instance ID
+                        "container_name": f"{service_name}-{i+1}",
+                        "status": swarm_service.get("status", "unknown"),
+                        "type": "swarm",
+                        "image": project.image_name,
+                        "started_at": project.created_at.isoformat()
+                        if project.created_at
+                        else "unknown",
+                        "ports": swarm_service.get("ports", {}),
+                        "instance_number": i + 1,
+                        "total_instances": instances,
+                    }
+                    project_list.append(project_info)
+            else:
+                # For regular containers, use the existing logic
+                project_info = {
+                    "project_id": project.id,
+                    "project_name": project.name,
+                    "container_id": None,
+                    "container_name": "unknown",
+                    "status": "unknown",
+                    "type": "container",
+                    "image": project.image_name,
+                    "started_at": project.created_at.isoformat()
+                    if project.created_at
+                    else "unknown",
+                }
+
+                # Get containers for this project
+                project_containers = db_manager.get_project_containers(project.name)
+                if project_containers:
+                    # Use the most recent container
+                    latest_container = project_containers[-1]
+                    project_info["container_id"] = latest_container.container_id
+                    project_info["container_name"] = latest_container.container_name
+
+                    # Check container status
+                    if latest_container.container_id in containers:
+                        container_info = containers[latest_container.container_id]
+                        project_info["status"] = container_info["status"]
+                        project_info["ports"] = container_info.get("ports", {})
+
+                project_list.append(project_info)
 
         return project_list
     except Exception as e:
