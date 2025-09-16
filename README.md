@@ -154,23 +154,14 @@ racer scale --project-name "my-app" --instances 2 --path ./my-project --app-port
   --environment DEBUG=true --command "python app.py"
 ```
 
-#### Dynamic Scaling (Scale Up/Down)
+#### Dynamic Scaling
 
 ```bash
-# Scale up existing service
-racer scale-up --project-name "my-app" --instances 5
+# Scale a project to multiple instances
+racer scale --project-name "my-app" --instances 5 --path ./my-project --app-port 8000
 
-# Scale down existing service
-racer scale-down --project-name "my-app" --instances 2
-
-# Check service status
-racer swarm-status --project-name "my-app"
-
-# View service logs
-racer swarm-logs --project-name "my-app"
-
-# Remove service
-racer swarm-remove --project-name "my-app"
+# Scale down by running scale with fewer instances
+racer scale --project-name "my-app" --instances 2 --path ./my-project --app-port 8000
 ```
 
 #### Rerun Projects
@@ -276,18 +267,25 @@ racerctl containers remove <container_id>
 racerctl containers cleanup
 ```
 
-#### Service Management (Docker Swarm)
+#### Swarm Management
 
 ```bash
-# List all services
-racerctl services list
+# Check swarm service status
+racerctl swarm status --project-name "my-app"
 
-# View service logs
-racerctl services logs <service_name>
+# List all swarm services
+racerctl swarm status
 
-# Remove service
-racerctl services remove <service_name>
+# View swarm service logs
+racerctl swarm logs --project-name "my-app"
+
+# Remove swarm service
+racerctl swarm remove --project-name "my-app"
+
+# Force remove without confirmation
+racerctl swarm remove --project-name "my-app" --force
 ```
+
 
 ## API
 
