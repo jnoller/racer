@@ -82,6 +82,23 @@ class LivenessResponse(BaseModel):
     timestamp: str
 
 
+class StatusResponse(BaseModel):
+    """Comprehensive status response consolidating all status checks."""
+    # Overall status
+    overall_status: str  # "healthy", "degraded", "unhealthy"
+    
+    # Service information
+    service: str
+    version: str
+    timestamp: str
+    
+    # Individual status checks
+    health: Dict[str, Any]
+    liveness: Dict[str, Any]
+    readiness: Dict[str, Any]
+    info: Dict[str, Any]
+
+
 class ProjectValidationRequest(BaseModel):
     project_path: Optional[str] = None
     git_url: Optional[str] = None
@@ -227,6 +244,87 @@ async def readiness_check():
         raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
 
 
+@app.get("/status", response_model=StatusResponse)
+async def comprehensive_status():
+    """
+    Get comprehensive status information about the Racer API server.
+    
+    This endpoint consolidates health, liveness, readiness, and info checks
+    into a single comprehensive status report.
+    """
+    try:
+        # Collect all status information
+        health_data = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "0.1.0",
+            "service": "racer-api"
+        }
+        
+        liveness_data = {
+            "alive": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Check readiness (this is the most complex check)
+        readiness_data = {"ready": True, "timestamp": datetime.now().isoformat()}
+        try:
+            # Initialize managers if not already done
+            global container_manager, swarm_manager, db_manager
+
+            if container_manager is None:
+                container_manager = ContainerManager()
+            if swarm_manager is None:
+                swarm_manager = SwarmManager()
+            if db_manager is None:
+                db_manager = DatabaseManager()
+        except Exception as e:
+            readiness_data = {
+                "ready": False, 
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e)
+            }
+        
+        info_data = {
+            "service": "Racer API",
+            "version": "0.1.0",
+            "description": "Rapid deployment system for conda-projects",
+            "docs": "/docs",
+            "health": "/health"
+        }
+        
+        # Determine overall status
+        overall_status = "healthy"
+        if not readiness_data.get("ready", False):
+            overall_status = "degraded"
+        if not liveness_data.get("alive", False):
+            overall_status = "unhealthy"
+        
+        return StatusResponse(
+            overall_status=overall_status,
+            service="racer-api",
+            version="0.1.0",
+            timestamp=datetime.now().isoformat(),
+            health=health_data,
+            liveness=liveness_data,
+            readiness=readiness_data,
+            info=info_data
+        )
+        
+    except Exception as e:
+        # If we can't even collect basic status, return unhealthy
+        return StatusResponse(
+            overall_status="unhealthy",
+            service="racer-api",
+            version="0.1.0",
+            timestamp=datetime.now().isoformat(),
+            health={"status": "error", "error": str(e)},
+            liveness={"alive": False, "error": str(e)},
+            readiness={"ready": False, "error": str(e)},
+            info={"error": str(e)}
+        )
+
+
 @app.get("/api/info")
 async def api_info():
     """
@@ -273,9 +371,10 @@ async def api_info():
                 "description": "System health and info endpoints",
                 "endpoints": [
                     "GET / - API root information",
-                    "GET /health - Health check",
-                    "GET /liveness - Liveness check", 
-                    "GET /ready - Readiness check",
+                    "GET /status - Comprehensive status check",
+                    "GET /health - Health check (legacy)",
+                    "GET /liveness - Liveness check (legacy)", 
+                    "GET /ready - Readiness check (legacy)",
                     "GET /api/info - This endpoint"
                 ]
             }

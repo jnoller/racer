@@ -60,31 +60,36 @@ def status(ctx, verbose):
     try:
         client = RacerAPIClient(base_url=api_url, timeout=timeout)
         
-        # Collect all status information
-        health_data = client.health()
-        liveness_data = client.liveness()
-        readiness_data = client.readiness()
-        info_data = client.info()
+        # Use the unified status endpoint
+        status_data = client._make_request("GET", "/status")
 
         if verbose:
             click.echo("Complete status response:")
-            click.echo("Health: " + json.dumps(health_data, indent=2))
-            click.echo("Liveness: " + json.dumps(liveness_data, indent=2))
-            click.echo("Readiness: " + json.dumps(readiness_data, indent=2))
-            click.echo("Info: " + json.dumps(info_data, indent=2))
+            click.echo(json.dumps(status_data, indent=2))
         else:
             # Comprehensive status display
             click.echo(click.style("🔍 Racer API Server Status", fg="blue", bold=True))
             click.echo()
 
             # Server Information
-            service = health_data.get("service", "unknown")
-            version = health_data.get("version", "unknown")
+            service = status_data.get("service", "unknown")
+            version = status_data.get("version", "unknown")
             click.echo(f"Service: {service} v{version}")
             click.echo(f"API URL: {api_url}")
             click.echo()
 
-            # Health Status
+            # Overall Status
+            overall_status = status_data.get("overall_status", "unknown")
+            if overall_status == "healthy":
+                click.echo(click.style("🎉 Overall Status: All systems operational", fg="green", bold=True))
+            elif overall_status == "degraded":
+                click.echo(click.style("⚠️  Overall Status: Degraded", fg="yellow", bold=True))
+            else:
+                click.echo(click.style("❌ Overall Status: Unhealthy", fg="red", bold=True))
+            click.echo()
+
+            # Individual Status Checks
+            health_data = status_data.get("health", {})
             health_status = health_data.get("status", "unknown")
             health_timestamp = health_data.get("timestamp", "unknown")
             if health_status == "healthy":
@@ -94,7 +99,7 @@ def status(ctx, verbose):
             click.echo(f"  Checked: {health_timestamp}")
             click.echo()
 
-            # Liveness Status
+            liveness_data = status_data.get("liveness", {})
             alive = liveness_data.get("alive", False)
             liveness_timestamp = liveness_data.get("timestamp", "unknown")
             if alive:
@@ -104,7 +109,7 @@ def status(ctx, verbose):
             click.echo(f"  Checked: {liveness_timestamp}")
             click.echo()
 
-            # Readiness Status
+            readiness_data = status_data.get("readiness", {})
             ready = readiness_data.get("ready", False)
             readiness_timestamp = readiness_data.get("timestamp", "unknown")
             if ready:
@@ -114,21 +119,14 @@ def status(ctx, verbose):
             click.echo(f"  Checked: {readiness_timestamp}")
             click.echo()
 
-            # Overall Status Summary
-            all_healthy = (health_status == "healthy" and alive and ready)
-            if all_healthy:
-                click.echo(click.style("🎉 Overall Status: All systems operational", fg="green", bold=True))
-            else:
-                click.echo(click.style("⚠️  Overall Status: Issues detected", fg="yellow", bold=True))
-            click.echo()
-
             # API Information
-            message = info_data.get("message", "Unknown")
-            click.echo(f"Description: {message}")
+            info_data = status_data.get("info", {})
+            description = info_data.get("description", "Unknown")
+            click.echo(f"Description: {description}")
             
             # Show available endpoints
             endpoints = {
-                k: v for k, v in info_data.items() if k not in ["message", "version"]
+                k: v for k, v in info_data.items() if k not in ["description", "version"]
             }
             if endpoints:
                 click.echo("Available endpoints:")

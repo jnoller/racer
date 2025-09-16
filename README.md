@@ -314,9 +314,10 @@ The backend provides a RESTful API at `http://localhost:8001` with comprehensive
 
 **System endpoints** (`/`):
 - `GET /` - API root information
-- `GET /health` - Health check
-- `GET /liveness` - Liveness check
-- `GET /ready` - Readiness check
+- `GET /status` - Comprehensive status check (health, liveness, readiness, info)
+- `GET /health` - Health check (legacy)
+- `GET /liveness` - Liveness check (legacy)
+- `GET /ready` - Readiness check (legacy)
 
 ## Port Management
 
