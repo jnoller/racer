@@ -35,7 +35,7 @@ racerctl server start
 racer deploy --project-name "my-app" --path /path/to/your/conda-project
 ```
 
-**Done!** Your conda-project is now running in a Docker container.
+**Done!** Your conda-project is now running!
 
 ---
 
